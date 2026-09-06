@@ -298,6 +298,17 @@ Ejemplos:
 
 Las credenciales usarán un proveedor de identidad o hash moderno. Nunca se migrarán contraseñas reversibles de Xion; se crearán cuentas y se exigirá una contraseña nueva.
 
+Las contraseñas de acceso nunca son consultables ni recuperables, incluso para un
+administrador: solo se conserva un verificador criptográfico. Cualquier usuario
+autenticado puede cambiar su propia contraseña al confirmar la actual. Quien tenga
+`users.update` puede restablecer la contraseña de otro usuario. En un tenant cliente
+ese permiso queda limitado a la propia organización. Para un usuario del tenant
+canónico `@auraly`, el contexto de ejecución aplica los permisos de la vista Usuarios
+al tenant seleccionado cuando tiene acceso a la vista Tenants mediante `tenants.read`;
+los endpoints operan únicamente sobre ese contexto ya validado y no existe una segunda
+familia `tenants.users.*`. La operación administrativa revoca los tokens de renovación
+y publica la invalidación de seguridad del usuario afectado.
+
 ---
 
 ## 6. Autorización y permisos
@@ -422,6 +433,11 @@ Permitirá:
 - guardar con resumen;
 - auditar antes y después;
 - previsualizar menú y acciones.
+
+La matriz se presenta por vista: acceso y acciones aparecen bajo la pantalla donde
+se ejecutan. No existe una categoría funcional llamada “permisos transaccionales”;
+“transaccional” describe garantías técnicas de una operación, no un lugar al cual
+asignar autorizaciones.
 
 No se copia la grilla WinForms, pero se conserva su granularidad útil.
 

@@ -23,8 +23,9 @@ export function TenantGovernancePanel({ tenant }: { tenant: Tenant }) {
   const permissions = useAuthStore((state) => new Set(state.user?.permissions ?? []));
   const canUpdateCapacity = permissions.has("tenants.capacity.update");
   const canUpdateStatus = permissions.has("tenants.status.update");
-  const canReadUsers = permissions.has("tenants.users.read");
-  const canManageUsers = permissions.has("tenants.users.manage");
+  const canReadUsers = permissions.has("users.read");
+  const canCreateUsers = permissions.has("users.create");
+  const canChangeUserState = permissions.has("users.delete");
   const canReadDevices = permissions.has("tenants.devices.read");
   const canRevokeDevices = permissions.has("tenants.devices.revoke");
   const users = useUsers({ tenantId: tenant.tenantId, page: 1, pageSize: 100 }, { enabled: canReadUsers });
@@ -114,13 +115,13 @@ export function TenantGovernancePanel({ tenant }: { tenant: Tenant }) {
     </section>
 
     {canReadUsers && <section className="rounded-2xl border bg-card p-6 shadow-sm">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-xs font-semibold uppercase tracking-wide text-primary">Acceso</p><h2 className="mt-1 text-xl font-semibold">Usuarios del tenant</h2><p className="mt-1 text-sm text-muted-foreground">La consulta y la administración son permisos independientes.</p></div>{canManageUsers && tenant.activeUserCount === 0 && <Button type="button" variant="outline" disabled={resendInvitation.isPending} onClick={() => resendInvitation.mutate()}><MailPlus className="mr-2 h-4 w-4" />{resendInvitation.isPending ? "Reenviando…" : "Reenviar invitación"}</Button>}</div>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-xs font-semibold uppercase tracking-wide text-primary">Acceso</p><h2 className="mt-1 text-xl font-semibold">Usuarios de la empresa</h2><p className="mt-1 text-sm text-muted-foreground">Se reutilizan los permisos de la vista Usuarios dentro de la empresa seleccionada.</p></div>{canCreateUsers && tenant.activeUserCount === 0 && <Button type="button" variant="outline" disabled={resendInvitation.isPending} onClick={() => resendInvitation.mutate()}><MailPlus className="mr-2 h-4 w-4" />{resendInvitation.isPending ? "Reenviando…" : "Reenviar invitación"}</Button>}</div>
       <div className="mt-5 overflow-hidden rounded-xl border">
         <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3 bg-muted/50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><span>Usuario</span><span>Estado</span><span>Acción</span></div>
         {userItems.map((user) => <div key={user.userId} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-t px-4 py-3">
           <span className="min-w-0"><strong className="block truncate text-sm">{user.firstName} {user.lastName}</strong><small className="block truncate text-muted-foreground">{user.email} · {user.username}</small></span>
           <Badge variant={user.isActive ? "default" : "secondary"}>{user.isActive ? "Activo" : "Inactivo"}</Badge>
-          {canManageUsers ? <Button size="sm" variant="outline" onClick={() => setSelectedUser(user)}>{user.isActive ? "Inactivar" : "Activar"}</Button> : <span />}
+          {canChangeUserState ? <Button size="sm" variant="outline" onClick={() => setSelectedUser(user)}>{user.isActive ? "Inactivar" : "Activar"}</Button> : <span />}
         </div>)}
         {!users.isLoading && userItems.length === 0 && <p className="border-t p-8 text-center text-sm text-muted-foreground">Sin datos</p>}
       </div>
@@ -146,7 +147,7 @@ export function TenantGovernancePanel({ tenant }: { tenant: Tenant }) {
     {canRevokeDevices && <Dialog open={!!selectedDevice} onOpenChange={(open) => !open && setSelectedDevice(null)}>
       <DialogContent><DialogHeader><DialogTitle>¿Desenrolar esta caja?</DialogTitle><DialogDescription>La caja dejará de sincronizar, sus sesiones se cerrarán y el cupo quedará disponible. Los documentos permanecen para auditoría.</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setSelectedDevice(null)}>Cancelar</Button><Button variant="destructive" disabled={!selectedDevice || deactivateDevice.isPending} onClick={() => selectedDevice && deactivateDevice.mutate(selectedDevice)}>Sí, desenrolar</Button></DialogFooter></DialogContent>
     </Dialog>}
-    {canManageUsers && <Dialog open={!!selectedUser} onOpenChange={(open) => !open && setSelectedUser(null)}>
+    {canChangeUserState && <Dialog open={!!selectedUser} onOpenChange={(open) => !open && setSelectedUser(null)}>
       <DialogContent><DialogHeader><DialogTitle>{selectedUser?.isActive ? "¿Inactivar este usuario?" : "¿Activar este usuario?"}</DialogTitle><DialogDescription>{selectedUser?.isActive ? "Su sesión será revocada y dejará de ocupar un cupo activo. Su historial no se elimina." : "La activación solo será posible si la organización tiene cupo disponible."}</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setSelectedUser(null)}>Cancelar</Button><Button disabled={!selectedUser || changeUserState.isPending} onClick={() => selectedUser && changeUserState.mutate(selectedUser)}>{selectedUser?.isActive ? "Inactivar usuario" : "Activar usuario"}</Button></DialogFooter></DialogContent>
     </Dialog>}
   </div>;

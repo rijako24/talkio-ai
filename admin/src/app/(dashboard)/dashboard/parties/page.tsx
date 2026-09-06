@@ -43,6 +43,7 @@ import { useBusinessContextStore } from "@/stores/business-context-store";
 import type { WorkingHour } from "@/types/entities";
 import { parseDecimalInput } from "@/lib/formatted-decimal-input";
 import { snapshotSaveHandlers } from "@/lib/party-user-role-selection";
+import { identificationTypeForPartyChange, identificationTypesForParty, type PartyType } from "@/lib/party-identification";
 
 const roleLabels: Record<PartyRole,string>={Customer:"Cliente",Supplier:"Proveedor",Seller:"Vendedor",Carrier:"Transportador",Employee:"Empleado",User:"Usuario"};
 const allRoles: PartyRole[]=["Customer","Supplier","Seller","Carrier","Employee","User"];
@@ -101,6 +102,7 @@ function CreateThirdPartyDialog({open,permissions,initialParty,onClose}:{open:bo
   const supplierTaxRules=useQuery({queryKey:["withholding-rules",businessId,"counterparty-create-options"],queryFn:()=>taxationApi.listRules(false),enabled:open&&(role==="Supplier"||role==="Customer")&&Boolean(businessId)});
   const taxResponsibilityOptions=useReferenceOptions("tax-responsibility",open&&(role==="Supplier"||role==="Customer"));
   const purchaseEvidenceOptions=useReferenceOptions("purchase-evidence-type",open&&role==="Supplier");
+  const identificationTypes=useReferenceOptions("tenant-identification-type",open&&Boolean(role));
   const [supplierEvidencePolicy,setSupplierEvidencePolicy]=useState<PurchaseEvidencePolicy|"Unconfigured">("Unconfigured");
   const [supplierTaxResponsibilities,setSupplierTaxResponsibilities]=useState<Set<string>>(new Set()),[supplierResponsibilityToAdd,setSupplierResponsibilityToAdd]=useState("");
   const [appliesWithholding,setAppliesWithholding]=useState(false);
@@ -121,7 +123,7 @@ function CreateThirdPartyDialog({open,permissions,initialParty,onClose}:{open:bo
     if(!open||!initialParty)return;
     const site=initialParty.primarySite;
     setPartyType(initialParty.partyType);
-    setForm({...emptyThirdPartyForm,identificationTypeCode:initialParty.identificationTypeCode??"",identification:initialParty.identification??"",displayName:initialParty.displayName,legalName:initialParty.legalName??"",firstName:initialParty.firstName??"",lastName:initialParty.lastName??"",email:initialParty.email??"",phone:initialParty.phone??"",siteName:site?.name??"Principal",addressLine:site?.addressLine??"",neighborhood:site?.neighborhood??""});
+    setForm({...emptyThirdPartyForm,identificationTypeCode:initialParty.identificationTypeCode??(initialParty.partyType==="Organization"?"NIT":"CC"),identification:initialParty.identification??"",displayName:initialParty.displayName,legalName:initialParty.legalName??"",firstName:initialParty.firstName??"",lastName:initialParty.lastName??"",email:initialParty.email??"",phone:initialParty.phone??"",siteName:site?.name??"Principal",addressLine:site?.addressLine??"",neighborhood:site?.neighborhood??""});
     setCountry(site?.countryId??initialParty.identificationCountryId??"");
     setDivision(site?.administrativeDivisionId??"");
     setCity(site?.cityId??"");
@@ -171,6 +173,8 @@ function CreateThirdPartyDialog({open,permissions,initialParty,onClose}:{open:bo
   const clearFieldError=(key:string)=>setFieldErrors(current=>{if(!current[key])return current;const next={...current};delete next[key];return next});
   const set=(key:keyof typeof form,value:string)=>{setForm((x)=>({...x,[key]:value}));if(value.trim())clearFieldError(key)};
   const reset=()=>{setFieldErrors({});setSelectedRole(undefined);setPartyType("NaturalPerson");setCountry("");setDivision("");setCity("");setForm(emptyThirdPartyForm);setLookupIdentification("");hydratedLookup.current="";setPricingMode("Default");setPricingId("");setPricingValidFrom(todayInput());setPricingValidUntil("");setRequiresElectronicInvoice(false);setAllowsCreditSales(false);setCreditLimit("");setCreditDueDays("30");setSupplierPaymentDueDays("30");setSupplierEvidencePolicy("Unconfigured");setAppliesWithholding(false);setSupplierTaxResponsibilities(new Set());setSupplierResponsibilityToAdd("");setAdditionalSites([]);setSelectedServiceIds(new Set());setServiceToAdd("");setSelectedUserRoleIds(new Set());setUserRoleToAdd("");setUsername("");setPassword("");setSaving(false);setCustomSchedule(false);setWorkingHours([{dayOfWeek:1,openTime:"08:00",closeTime:"17:00",isActive:true}]);};
+  const changePartyType=(value:string)=>{const next=value as PartyType;setPartyType(next);setForm(current=>({...current,identificationTypeCode:identificationTypeForPartyChange(current.identificationTypeCode,next,identificationTypes.data??[])}));};
+  const availableIdentificationTypes=identificationTypesForParty(identificationTypes.data??[],partyType as PartyType);
   const close=()=>{reset();onClose()};
   const submit=async()=>{
     if(!role||!businessId)return;
@@ -247,8 +251,8 @@ function CreateThirdPartyDialog({open,permissions,initialParty,onClose}:{open:bo
         <Button type="button" variant="outline" onClick={()=>setSelectedRole(undefined)}>Cambiar rol</Button>
       </div>
       <IdentityNotice role={role} lookup={identity}/><div className="grid gap-4 md:grid-cols-2">
-      <FormSectionTitle title="Identidad" description="Datos compartidos por todos los roles comerciales." /><Field label="Tipo de tercero"><Select value={partyType} onValueChange={setPartyType}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="NaturalPerson">Persona natural</SelectItem><SelectItem value="Organization">Organización</SelectItem></SelectContent></Select></Field>
-      <Field label="Tipo de identificación" error={fieldErrors.identificationTypeCode}><Select value={form.identificationTypeCode} onValueChange={(v)=>set("identificationTypeCode",v)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="CC">Cédula</SelectItem><SelectItem value="NIT">NIT</SelectItem><SelectItem value="CE">Cédula de extranjería</SelectItem><SelectItem value="PP">Pasaporte</SelectItem></SelectContent></Select></Field>
+      <FormSectionTitle title="Identidad" description="Datos compartidos por todos los roles comerciales." /><Field label="Tipo de tercero"><Select value={partyType} onValueChange={changePartyType}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="NaturalPerson">Persona natural</SelectItem><SelectItem value="Organization">Organización</SelectItem></SelectContent></Select></Field>
+      <Field label="Tipo de identificación" error={fieldErrors.identificationTypeCode}><Select value={form.identificationTypeCode} onValueChange={(v)=>set("identificationTypeCode",v)} disabled={identificationTypes.isLoading||availableIdentificationTypes.length===0}><SelectTrigger><SelectValue placeholder={identificationTypes.isLoading?"Cargando…":"Selecciona"}/></SelectTrigger><SelectContent>{availableIdentificationTypes.map(option=><SelectItem key={option.id} value={option.code}>{option.label}</SelectItem>)}</SelectContent></Select></Field>
       <Field label="Identificación" error={fieldErrors.identification}><Input aria-invalid={Boolean(fieldErrors.identification)} value={form.identification} onChange={(e)=>set("identification",e.target.value)} onBlur={()=>setLookupIdentification(form.identification.trim())}/></Field><Field label="Nombre visible" error={fieldErrors.displayName}><Input aria-invalid={Boolean(fieldErrors.displayName)} value={form.displayName} onChange={(e)=>set("displayName",e.target.value)}/></Field>
       {partyType==="Organization"?<Field label="Razón social"><Input value={form.legalName} onChange={(e)=>set("legalName",e.target.value)}/></Field>:<><Field label="Nombres"><Input value={form.firstName} onChange={(e)=>set("firstName",e.target.value)}/></Field><Field label="Apellidos"><Input value={form.lastName} onChange={(e)=>set("lastName",e.target.value)}/></Field></>}
       <Field label="Teléfono"><Input value={form.phone} onChange={(e)=>set("phone",e.target.value)}/></Field><Field label="Correo" error={fieldErrors.email}><Input type="email" aria-invalid={Boolean(fieldErrors.email)} value={form.email} onChange={(e)=>set("email",e.target.value)}/></Field>

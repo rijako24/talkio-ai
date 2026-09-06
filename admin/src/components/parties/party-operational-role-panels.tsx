@@ -19,6 +19,7 @@ import { useReferenceOptions } from "@/hooks/use-reference-options";
 import { employeesApi, usersApi } from "@/services/api";
 import type { PartySiteDetail, UserRoleDetail } from "@/services/api/parties";
 import { configuredPasswordMask, effectiveUserRoleAssignments } from "@/lib/party-user-role-selection";
+import { counterpartyWithholdingRuleIsCandidate, isIncomeTaxSelfWithholdingSupplier } from "@/lib/party-tax-profile";
 import { taxationApi, type WithholdingRule } from "@/services/api/taxation";
 import { receivablesApi } from "@/services/api/receivables";
 import { payrollApi } from "@/services/api/payroll";
@@ -138,13 +139,13 @@ function PartyCounterpartyTaxRolePanel({ counterpartyId, role, editing, primaryS
 }
 
 export function CounterpartyWithholdingRules({ rules, loading, error, role, responsibilities = new Set(), jurisdictionCode = null }: { rules: WithholdingRule[]; loading: boolean; error: boolean; role: "customer" | "supplier"; responsibilities?: ReadonlySet<string>; jurisdictionCode?: string | null }) {
-  const direction = role === "customer" ? "Sale" : "Purchase";
-  const candidates = rules.filter((rule) => rule.isActive && rule.direction === direction);
-  const applicable = candidates.filter((rule) =>
-    rule.requiredResponsibilities.every((code) => responsibilities.has(code))
-    && (!rule.jurisdictionCode || rule.jurisdictionCode === jurisdictionCode));
+  const applicable = rules.filter((rule) => counterpartyWithholdingRuleIsCandidate(
+    rule, role, responsibilities, jurisdictionCode,
+  ));
+  const selfWithholdingSupplier = isIncomeTaxSelfWithholdingSupplier(role, responsibilities);
   return <div className="space-y-2 border-t pt-4">
     <Label>Reglas tributarias aplicables</Label>
+    {selfWithholdingSupplier&&<p className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">ReteFuente de renta no aplicable: el proveedor está registrado como autorretenedor. Otras retenciones se evalúan normalmente.</p>}
     {loading ? <p className="text-sm text-muted-foreground">Cargando reglas…</p>
       : error ? <p className="text-sm text-destructive">No fue posible cargar las reglas de retención.</p>
       : applicable.length ? <div className="flex flex-wrap gap-2">{applicable.map((rule) => <Badge key={rule.ruleId} variant="outline">{rule.name} · {rule.rate}%</Badge>)}</div>
@@ -222,6 +223,8 @@ export function PartyUserRolePanel({ user, editing, registerSave }: { user: User
   const [newPassword, setNewPassword] = useState("");
   const [roleError, setRoleError] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const canManageUsers = useAuthStore((state) =>
+    state.user?.permissions.includes("users.update") ?? false);
   const canManageApprovalCredential = useAuthStore((state) =>
     state.user?.permissions.includes("pos.approvals.manage_credential") ?? false);
   const approvalCredential = useQuery({
@@ -254,7 +257,7 @@ export function PartyUserRolePanel({ user, editing, registerSave }: { user: User
       ...scopedAssignments.filter((item) => !selectedIds.has(item.roleId)).map((item) => usersApi.removeRole(userId, item.roleId, item.businessId)),
     ]);
     if (active !== user.isActive) await (active ? usersApi.activate(userId) : usersApi.deactivate(userId));
-    if (newPassword) await usersApi.resetPassword(userId, newPassword);
+    if (canManageUsers && newPassword) await usersApi.resetPassword(userId, newPassword);
     if (canManageApprovalCredential && revokeApprovalCredential) {
       await posApprovalClient.revokeUserCredential(userId);
       setRevokeApprovalCredential(false);
@@ -274,7 +277,7 @@ export function PartyUserRolePanel({ user, editing, registerSave }: { user: User
     }
     setNewPassword("");
   };
-  useEffect(() => registerSave(`user-${userId}`, save), [registerSave, userId, businessId, user, scopedAssignments, selectedIds, active, newPassword, canManageApprovalCredential, revokeApprovalCredential, approvalSecret, approvalConfirmation, approvalValidity]);
+  useEffect(() => registerSave(`user-${userId}`, save), [registerSave, userId, businessId, user, scopedAssignments, selectedIds, active, newPassword, canManageUsers, canManageApprovalCredential, revokeApprovalCredential, approvalSecret, approvalConfirmation, approvalValidity]);
 
   const available = (roles.data?.items ?? []).filter((item) => item.isActive && !selectedIds.has(item.roleId));
   return <div className="space-y-5">
@@ -282,7 +285,7 @@ export function PartyUserRolePanel({ user, editing, registerSave }: { user: User
       <div className="flex items-center gap-3"><span className="text-sm text-slate-300">Usuario habilitado</span><Switch checked={active} onCheckedChange={setActive} disabled={!editing}/></div>
     </PanelHeader>
     <section className={`space-y-3 rounded-2xl border p-5 ${roleError ? "border-destructive" : ""}`}><div><h3 className="font-semibold">Roles en este negocio</h3><p className="text-sm text-muted-foreground">Definen los menús visibles y las acciones habilitadas en cada vista.</p></div>{editing&&<Select value={roleToAdd} onValueChange={(value) => { setRoleToAdd(""); setRoleError(""); setSelectedIds((current) => new Set(current).add(value)); }}><SelectTrigger aria-invalid={Boolean(roleError)} className={roleError ? "border-destructive" : ""}><SelectValue placeholder={roles.isLoading ? "Cargando roles..." : "Agregar rol"} /></SelectTrigger><SelectContent>{available.map((role) => <SelectItem key={role.roleId} value={role.roleId}>{role.name}</SelectItem>)}{available.length === 0 && <SelectItem value="_none" disabled>Sin datos</SelectItem>}</SelectContent></Select>}{roleError && <p className="text-sm text-destructive">{roleError}</p>}<div className="grid gap-3 sm:grid-cols-2">{[...selectedIds].map((roleId) => { const role = roles.data?.items.find((item) => item.roleId === roleId); const assigned = scopedAssignments.find((item) => item.roleId === roleId); return <div key={roleId} className="flex items-center justify-between rounded-xl border bg-card p-4"><div><p className="font-medium">{role?.name ?? assigned?.roleName ?? "Rol"}</p><p className="text-xs text-muted-foreground">{role?.description ?? "Permisos asignados"}</p></div>{editing&&<Button type="button" variant="ghost" size="icon" onClick={() => setSelectedIds((current) => { const next = new Set(current); next.delete(roleId); return next; })}><X className="h-4 w-4" /></Button>}</div>; })}{selectedIds.size === 0 && <EmptyState text="Sin roles asignados en este negocio." />}</div></section>
-    {editing&&<section className={`space-y-3 rounded-2xl border p-5 ${passwordError ? "border-destructive" : ""}`}><div><Label htmlFor={`reset-${userId}`}>Contraseña de acceso y modo sin conexión POS</Label><p className="text-sm text-muted-foreground">La máscara indica que ya existe una contraseña. Escribe una nueva solo para reemplazarla; si no escribes, se conserva intacta.</p></div><Input id={`reset-${userId}`} type="password" autoComplete="new-password" value={newPassword} onChange={(event) => { setNewPassword(event.target.value); setPasswordError(""); }} aria-invalid={Boolean(passwordError)} className={passwordError ? "border-destructive" : ""} placeholder={configuredPasswordMask} />{passwordError && <p className="text-sm text-destructive">{passwordError}</p>}</section>}
+    {editing&&canManageUsers&&<section className={`space-y-3 rounded-2xl border p-5 ${passwordError ? "border-destructive" : ""}`}><div><Label htmlFor={`reset-${userId}`}>Restablecer contraseña de acceso y modo sin conexión POS</Label><p className="text-sm text-muted-foreground">Por seguridad la contraseña actual nunca se puede consultar. Los puntos indican que ya existe una; escribe una nueva solo para reemplazarla.</p></div><Input id={`reset-${userId}`} type="password" autoComplete="new-password" value={newPassword} onChange={(event) => { setNewPassword(event.target.value); setPasswordError(""); }} aria-invalid={Boolean(passwordError)} className={`${passwordError ? "border-destructive" : ""} placeholder:text-foreground placeholder:opacity-100`} placeholder={configuredPasswordMask} />{passwordError && <p className="text-sm text-destructive">{passwordError}</p>}</section>}
     {canManageApprovalCredential&&<section className="space-y-4 rounded-2xl border p-5"><div><h3 className="font-semibold">Clave de autorización de supervisor</h3><p className="text-sm text-muted-foreground">Permite que este usuario autorice una sola acción sensible en la caja, como cerrar una sesión de venta. Es independiente de su contraseña de acceso.</p></div>{approvalCredential.data?.isConfigured&&<div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-emerald-50 p-4 text-sm"><div><strong>Clave configurada</strong><p className="text-muted-foreground">{approvalCredential.data.isOneTime?"Válida para una sola autorización":approvalCredential.data.validUntil?`Vence ${new Date(approvalCredential.data.validUntil).toLocaleString("es-CO")}`:"Sin vencimiento"}</p></div>{editing&&<Button type="button" variant={revokeApprovalCredential?"outline":"destructive"} size="sm" onClick={()=>setRevokeApprovalCredential(value=>!value)}>{revokeApprovalCredential?"Conservar clave":"Revocar al guardar"}</Button>}</div>}{editing&&<div className="grid gap-4 md:grid-cols-3"><div className="space-y-2"><Label>Nueva clave</Label><Input type="password" minLength={6} maxLength={32} value={approvalSecret} onChange={event=>{setApprovalSecret(event.target.value);setRevokeApprovalCredential(false)}} autoComplete="new-password" placeholder="Mínimo 6 caracteres"/></div><div className="space-y-2"><Label>Confirmar clave</Label><Input type="password" minLength={6} maxLength={32} value={approvalConfirmation} onChange={event=>setApprovalConfirmation(event.target.value)} autoComplete="new-password"/></div><div className="space-y-2"><Label>Vigencia</Label><Select value={approvalValidity} onValueChange={value=>setApprovalValidity(value as typeof approvalValidity)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="once">Un solo uso</SelectItem><SelectItem value="8">8 horas</SelectItem><SelectItem value="168">1 semana</SelectItem><SelectItem value="always">Sin vencimiento</SelectItem></SelectContent></Select></div>{approvalConfirmation&&approvalSecret!==approvalConfirmation&&<p className="text-sm text-destructive md:col-span-3">Las claves no coinciden.</p>}<p className="text-xs text-muted-foreground md:col-span-3">La nueva clave o la revocación se aplicará al pulsar “Guardar tercero”.</p></div>}</section>}
   </div>;
 }

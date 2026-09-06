@@ -9,8 +9,6 @@ public static class PlatformPermissions
     public const string TenantsUpdate = "tenants.update";
     public const string TenantCapacityUpdate = "tenants.capacity.update";
     public const string TenantStatusUpdate = "tenants.status.update";
-    public const string TenantUsersRead = "tenants.users.read";
-    public const string TenantUsersManage = "tenants.users.manage";
     public const string TenantDevicesRead = "tenants.devices.read";
     public const string TenantDevicesRevoke = "tenants.devices.revoke";
     public const string TenantBillingPolicyManage = "tenants.billing.policy.manage";

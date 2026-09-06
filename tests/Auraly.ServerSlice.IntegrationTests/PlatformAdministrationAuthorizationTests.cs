@@ -24,7 +24,7 @@ public sealed class PlatformAdministrationAuthorizationTests(ServerSliceFixture 
             "permissions.read", "roles.read", "roles.create", "roles.assign_permissions",
             "users.read", "users.create", "users.update", "users.delete", "users.assign_role",
             "tenants.read", "tenants.capacity.update", "tenants.status.update",
-            "tenants.users.read", "tenants.users.manage", "tenants.devices.read",
+            "tenants.devices.read",
             "tenants.devices.revoke", "platform.permissions.assign",
             "platform.fiscal_certificates.expiry.read"
         };
@@ -44,24 +44,46 @@ public sealed class PlatformAdministrationAuthorizationTests(ServerSliceFixture 
         using var crossTenantUpdate = await restricted.PutAsJsonAsync($"/api/v1/users/{fixture.UserId:D}", new { firstName = "No autorizado" });
         Assert.Equal(HttpStatusCode.Forbidden, crossTenantUpdate.StatusCode);
 
+        using var userWithoutManagement = fixture.CreateTenantUserClient(
+            AuralyTenantId, rootUserId);
+        using var forbiddenSameTenantCredentialReset = await userWithoutManagement.PostAsJsonAsync(
+            $"/api/v1/users/{restrictedUser.UserId:D}/reset-password",
+            new { password = "Nueva-Clave-Segura-2026!" });
+        Assert.Equal(HttpStatusCode.Forbidden, forbiddenSameTenantCredentialReset.StatusCode);
+
+        using var allowedSameTenantCredentialReset = await restricted.PostAsJsonAsync(
+            $"/api/v1/users/{restrictedUser.UserId:D}/reset-password",
+            new { password = "Nueva-Clave-Segura-2026!" });
+        Assert.Equal(HttpStatusCode.NoContent, allowedSameTenantCredentialReset.StatusCode);
+
         using var crossTenantDevices = await restricted.GetAsync($"/api/v1/tenants/{fixture.TenantId:D}/devices");
         Assert.Equal(HttpStatusCode.Forbidden, crossTenantDevices.StatusCode);
 
         using var crossTenantCapacity = await restricted.PutAsJsonAsync($"/api/v1/tenants/{fixture.TenantId:D}", new { maximumUsers = 513 });
         Assert.Equal(HttpStatusCode.Forbidden, crossTenantCapacity.StatusCode);
 
-        var forbiddenEscalation = PermissionIds(permissions, restrictedResources.Append("tenants.users.read"));
+        var forbiddenEscalation = PermissionIds(permissions, restrictedResources.Append("tenants.read"));
         await AssignPermissionsAsync(restricted, restrictedRole.RoleId, forbiddenEscalation, HttpStatusCode.Forbidden);
 
         var delegatedRole = await CreateRoleAsync(root, "Consulta multitenant delegada");
-        var delegatedResources = new[] { "users.read", "tenants.users.read" };
+        var delegatedResources = new[] { "users.read", "tenants.read" };
         await AssignPermissionsAsync(root, delegatedRole.RoleId, PermissionIds(permissions, delegatedResources), HttpStatusCode.NoContent);
         var delegatedUser = await CreateUserAsync(root, "delegated", delegatedRole.RoleId);
         Assert.Contains(delegatedUser.Roles, assignment => assignment.RoleId == delegatedRole.RoleId);
 
         using var delegated = fixture.CreateTenantUserClient(AuralyTenantId, delegatedUser.UserId, delegatedResources);
+        delegated.DefaultRequestHeaders.Add("X-Tenant-Id", fixture.TenantId.ToString("D"));
         using var allowedUsers = await delegated.GetAsync($"/api/v1/users?tenantId={fixture.TenantId:D}&page=1&pageSize=10");
         Assert.Equal(HttpStatusCode.OK, allowedUsers.StatusCode);
+
+        using var rootInCustomerTenant = fixture.CreateTenantUserClient(
+            AuralyTenantId, rootUserId, rootPermissions);
+        rootInCustomerTenant.DefaultRequestHeaders.Add(
+            "X-Tenant-Id", customerTenantId.ToString("D"));
+        using var allowedCrossTenantReset = await rootInCustomerTenant.PostAsJsonAsync(
+            $"/api/v1/users/{customerUserId:D}/reset-password",
+            new { password = "Nueva-Clave-Segura-2026!" });
+        Assert.Equal(HttpStatusCode.NoContent, allowedCrossTenantReset.StatusCode);
 
         using var allowedDevices = await root.GetAsync($"/api/v1/tenants/{fixture.TenantId:D}/devices");
         Assert.Equal(HttpStatusCode.OK, allowedDevices.StatusCode);
@@ -78,15 +100,22 @@ public sealed class PlatformAdministrationAuthorizationTests(ServerSliceFixture 
             customerUserId,
             "roles.assign_permissions",
             "platform.permissions.assign",
-            "tenants.users.read",
+            "tenants.read",
             "platform.fiscal_certificates.expiry.read");
         using var forbiddenCertificateAlerts = await customer.GetAsync(
             "/api/v1/tenants/fiscal-certificate-expiry-alerts");
         Assert.Equal(HttpStatusCode.Forbidden, forbiddenCertificateAlerts.StatusCode);
+        using var customerCrossTenant = fixture.CreateTenantUserClient(
+            customerTenantId, customerUserId, "users.read", "tenants.read");
+        customerCrossTenant.DefaultRequestHeaders.Add(
+            "X-Tenant-Id", AuralyTenantId.ToString("D"));
+        using var forbiddenCustomerCrossTenantUsers = await customerCrossTenant.GetAsync(
+            $"/api/v1/users?tenantId={AuralyTenantId:D}&page=1&pageSize=10");
+        Assert.Equal(HttpStatusCode.Forbidden, forbiddenCustomerCrossTenantUsers.StatusCode);
         await AssignPermissionsAsync(
             customer,
             customerRoleId,
-            PermissionIds(permissions, ["roles.assign_permissions", "platform.permissions.assign", "tenants.users.read"]),
+            PermissionIds(permissions, ["roles.assign_permissions", "platform.permissions.assign", "tenants.read"]),
             HttpStatusCode.Forbidden);
     }
 
@@ -111,7 +140,7 @@ public sealed class PlatformAdministrationAuthorizationTests(ServerSliceFixture 
             INSERT dbo.UserRoles(UserRoleId,UserId,RoleId,BusinessId,AssignedAt) VALUES(NEWID(),@CustomerUserId,@CustomerRoleId,NULL,SYSUTCDATETIME());
             INSERT dbo.RolePermissions(RolePermissionId,RoleId,PermissionId,AssignedAt)
             SELECT NEWID(),@CustomerRoleId,PermissionId,SYSUTCDATETIME() FROM dbo.Permissions
-            WHERE Resource IN(N'roles.assign_permissions',N'platform.permissions.assign',N'tenants.users.read');
+            WHERE Resource IN(N'roles.assign_permissions',N'platform.permissions.assign',N'tenants.read');
             """;
         command.Parameters.AddWithValue("@AuralyTenantId", AuralyTenantId);
         command.Parameters.AddWithValue("@RootUserId", rootUserId);

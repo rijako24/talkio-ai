@@ -112,11 +112,14 @@ public sealed class TenantsController(
     }
 
     [HttpPost("{tenantId:guid}/administrator-invitation/resend")]
-    [PermissionAuthorize("tenants.users.manage")]
+    [PermissionAuthorize("users.create")]
     public async Task<ActionResult<ResendTenantInvitationResult>> ResendAdministratorInvitation(
         Guid tenantId,
         CancellationToken ct)
     {
+        if (tenantId != User.GetTenantId())
+            throw new ForbiddenException(
+                "Selecciona la organización antes de reenviar esta invitación.");
         try
         {
             return Ok(await tenantInvitations.ResendAsync(

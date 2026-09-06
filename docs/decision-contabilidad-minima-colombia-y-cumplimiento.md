@@ -133,6 +133,13 @@ El núcleo contempla definiciones y vigencias para:
 
 Responsabilidades, bases, cuantías y tarifas son configurables y versionadas. No se codifican como constantes eternas.
 
+En compras, la responsabilidad tributaria oficial `O-15` identifica al proveedor
+autorretenedor de renta. Una regla `IncomeTax` no se aplica a ese proveedor,
+independientemente de su base mínima; la exclusión se decide antes de calcular la
+cuantía. Esta condición no elimina ReteIVA ni ReteICA y no cambia las retenciones
+sufridas en ventas. Los documentos ya contabilizados permanecen inmutables y se
+corrigen mediante un comprobante posterior cuando corresponda.
+
 ## 11. Informes mínimos
 
 Contables:

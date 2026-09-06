@@ -20,7 +20,7 @@ public class UsersController(IUserService userService) : ControllerBase
     {
         var ownTenantId = User.GetTenantId();
         var requestedTenantId = tenantId ?? ownTenantId;
-        EnsureCrossTenantPermission(requestedTenantId, "tenants.users.read");
+        EnsureSelectedTenant(requestedTenantId);
         return Ok(await userService.GetPagedAsync(requestedTenantId, request, ct));
     }
 
@@ -29,7 +29,7 @@ public class UsersController(IUserService userService) : ControllerBase
     public async Task<ActionResult<UserDto>> GetById(Guid userId, CancellationToken ct)
     {
         var user = await userService.GetByIdAsync(userId, ct);
-        EnsureScope(user, "tenants.users.read");
+        EnsureScope(user);
         return Ok(user);
     }
 
@@ -45,7 +45,7 @@ public class UsersController(IUserService userService) : ControllerBase
     [PermissionAuthorize("users.update")]
     public async Task<ActionResult<UserDto>> Update(Guid userId, [FromBody] UpdateUserRequest request, CancellationToken ct)
     {
-        await EnsureScopeAsync(userId, "tenants.users.manage", ct);
+        await EnsureScopeAsync(userId, ct);
         return Ok(await userService.UpdateAsync(userId, request, ct));
     }
 
@@ -53,7 +53,7 @@ public class UsersController(IUserService userService) : ControllerBase
     [PermissionAuthorize("users.update")]
     public async Task<IActionResult> ResetPassword(Guid userId, [FromBody] ResetUserPasswordRequest request, CancellationToken ct)
     {
-        await EnsureScopeAsync(userId, "tenants.users.manage", ct);
+        await EnsureScopeAsync(userId, ct);
         await userService.ResetPasswordAsync(userId, request, ct);
         return NoContent();
     }
@@ -62,7 +62,7 @@ public class UsersController(IUserService userService) : ControllerBase
     [PermissionAuthorize("users.delete")]
     public async Task<IActionResult> Deactivate(Guid userId, CancellationToken ct)
     {
-        await EnsureScopeAsync(userId, "tenants.users.manage", ct);
+        await EnsureScopeAsync(userId, ct);
         await userService.DeactivateAsync(userId, ct);
         return NoContent();
     }
@@ -71,7 +71,7 @@ public class UsersController(IUserService userService) : ControllerBase
     [PermissionAuthorize("users.delete")]
     public async Task<IActionResult> Activate(Guid userId, CancellationToken ct)
     {
-        await EnsureScopeAsync(userId, "tenants.users.manage", ct);
+        await EnsureScopeAsync(userId, ct);
         await userService.ActivateAsync(userId, ct);
         return NoContent();
     }
@@ -98,18 +98,19 @@ public class UsersController(IUserService userService) : ControllerBase
     [PermissionAuthorize("users.read")]
     public async Task<ActionResult<IReadOnlyList<string>>> GetPermissions(Guid userId, [FromQuery] Guid? businessId, CancellationToken ct)
     {
-        await EnsureScopeAsync(userId, "tenants.users.read", ct);
+        await EnsureScopeAsync(userId, ct);
         return Ok(await userService.GetUserPermissionsAsync(userId, businessId, ct));
     }
 
-    private void EnsureCrossTenantPermission(Guid requestedTenantId, string permission)
+    private void EnsureSelectedTenant(Guid requestedTenantId)
     {
-        if (requestedTenantId != User.GetTenantId() && !User.HasPermission(permission))
-            throw new ForbiddenException("No puede consultar usuarios de otra organización.");
+        if (requestedTenantId != User.GetTenantId())
+            throw new ForbiddenException(
+                "Selecciona la organización antes de consultar sus usuarios.");
     }
 
-    private async Task EnsureScopeAsync(Guid userId, string crossTenantPermission, CancellationToken ct) =>
-        EnsureScope(await userService.GetByIdAsync(userId, ct), crossTenantPermission);
+    private async Task EnsureScopeAsync(Guid userId, CancellationToken ct) =>
+        EnsureScope(await userService.GetByIdAsync(userId, ct));
 
     private async Task EnsureOwnTenantAsync(Guid userId, CancellationToken ct)
     {
@@ -118,9 +119,9 @@ public class UsersController(IUserService userService) : ControllerBase
             throw new ForbiddenException("Los roles se administran únicamente dentro de la organización que los define.");
     }
 
-    private void EnsureScope(UserDto user, string crossTenantPermission)
+    private void EnsureScope(UserDto user)
     {
-        if (user.TenantId == User.GetTenantId() || User.HasPermission(crossTenantPermission)) return;
+        if (user.TenantId == User.GetTenantId()) return;
         throw new ForbiddenException("No puede administrar usuarios de otra organización.");
     }
 }

@@ -132,6 +132,12 @@
     ,"src/lib/inventory-operation-launch.test.ts"
     ,"src/lib/party-user-role-selection.ts"
     ,"src/lib/party-user-role-selection.test.ts"
+    ,"src/lib/party-identification.ts"
+    ,"src/lib/party-identification.test.ts"
+    ,"src/lib/party-tax-profile.ts"
+    ,"src/lib/party-tax-profile.test.ts"
+    ,"src/lib/change-password.ts"
+    ,"src/lib/change-password.test.ts"
     ,"src/lib/tenant-legal-identity.ts"
     ,"src/lib/tenant-legal-identity.test.ts"
   ]

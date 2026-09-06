@@ -35,5 +35,7 @@ export const authApi = {
     apiClient.post<AuthBffResponse>("/auth/register", data),
   acceptInvitation: (data: AcceptTenantInvitationRequest) =>
     apiClient.post<AcceptTenantInvitationResult>("/auth/invitations/accept", data),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    apiClient.post<void>("/auth/change-password", { currentPassword, newPassword }),
   me: () => apiClient.get<AuthUser>("/auth/me"),
 };

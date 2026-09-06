@@ -16,6 +16,13 @@ public sealed class AuthService(
         ChangePasswordRequest request,
         CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(request.CurrentPassword))
+            throw new DomainValidationException(
+                "currentPassword", "La contraseña actual es obligatoria.");
+        if (string.IsNullOrWhiteSpace(request.NewPassword) || request.NewPassword.Length < 10)
+            throw new DomainValidationException(
+                "newPassword", "La nueva contraseña debe tener al menos 10 caracteres.");
+
         var user = await unitOfWork.AppUsers.GetByIdAsync(
             userId, cancellationToken)
             ?? throw new NotFoundException(nameof(AppUser), userId);

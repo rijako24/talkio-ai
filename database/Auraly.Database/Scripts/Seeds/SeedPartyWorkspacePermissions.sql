@@ -16,7 +16,7 @@ INSERT @PartyPermissions VALUES
 (N'Carriers',N'Create',N'carriers.create',N'Crear transportadores como rol de Party'),
 (N'Masters',N'Read',N'masters.geography.read',N'Consultar maestros geogrÃ¡ficos'),
 (N'Masters',N'Manage',N'masters.geography.manage',N'Administrar maestros geogrÃ¡ficos'),
-(N'Security',N'LinkParty',N'security.users.link-party',N'Enlazar una cuenta de usuario con Party');
+(N'Security',N'LinkParty',N'security.users.link-party',N'Enlazar una cuenta de usuario con el tercero');
 INSERT dbo.Permissions(PermissionId,Module,Action,Resource,Description,CreatedAt)
 SELECT NEWID(),p.Module,p.Action,p.Resource,p.Description,SYSUTCDATETIME() FROM @PartyPermissions p
 WHERE NOT EXISTS(SELECT 1 FROM dbo.Permissions x WHERE x.Resource=p.Resource);

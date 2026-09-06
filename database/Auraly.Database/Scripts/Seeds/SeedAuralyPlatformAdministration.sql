@@ -9,16 +9,14 @@ IF NOT EXISTS (SELECT 1 FROM dbo.Tenants WHERE TenantId=@AuralyTenantId AND Tena
 
 DECLARE @PlatformPermissions TABLE(Module NVARCHAR(50), Action NVARCHAR(50), Resource NVARCHAR(100), Description NVARCHAR(500));
 INSERT INTO @PlatformPermissions VALUES
-(N'Tenants',N'Read',N'tenants.read',N'Ver tenants'),
-(N'Tenants',N'Create',N'tenants.create',N'Crear tenants'),
-(N'Tenants',N'WaiveProvisioningPayment',N'tenants.provisioning.payment.waive',N'Omitir el pago inicial al aprovisionar un tenant'),
-(N'Tenants',N'Update',N'tenants.update',N'Actualizar datos de tenants'),
+(N'Tenants',N'Read',N'tenants.read',N'Ver empresas'),
+(N'Tenants',N'Create',N'tenants.create',N'Crear empresas'),
+(N'Tenants',N'WaiveProvisioningPayment',N'tenants.provisioning.payment.waive',N'Omitir el pago inicial al aprovisionar una empresa'),
+(N'Tenants',N'Update',N'tenants.update',N'Actualizar datos de empresas'),
 (N'Tenants',N'UpdateCapacity',N'tenants.capacity.update',N'Modificar cupos de usuarios y cajas'),
-(N'Tenants',N'UpdateStatus',N'tenants.status.update',N'Activar o inactivar tenants'),
-(N'Tenants',N'ReadUsers',N'tenants.users.read',N'Consultar usuarios de otros tenants'),
-(N'Tenants',N'ManageUsers',N'tenants.users.manage',N'Administrar usuarios de otros tenants'),
-(N'Tenants',N'ReadDevices',N'tenants.devices.read',N'Consultar cajas enroladas de otros tenants'),
-(N'Tenants',N'RevokeDevices',N'tenants.devices.revoke',N'Desenrolar cajas de otros tenants'),
+(N'Tenants',N'UpdateStatus',N'tenants.status.update',N'Activar o inactivar empresas'),
+(N'Tenants',N'ReadDevices',N'tenants.devices.read',N'Consultar cajas enroladas de otras empresas'),
+(N'Tenants',N'RevokeDevices',N'tenants.devices.revoke',N'Desenrolar cajas de otras empresas'),
 (N'Tenants',N'ManageBillingPolicy',N'tenants.billing.policy.manage',N'Configurar la política global de cobranza'),
 (N'Tenants',N'ConfirmManualBillingPayment',N'tenants.billing.payment.confirm_manual',N'Confirmar recaudos externos de suscripciones'),
 (N'Platform',N'AssignPermissions',N'platform.permissions.assign',N'Delegar permisos de plataforma'),
@@ -28,6 +26,21 @@ INSERT dbo.Permissions(PermissionId,Module,Action,Resource,Description,CreatedAt
 SELECT NEWID(),source.Module,source.Action,source.Resource,source.Description,SYSUTCDATETIME()
 FROM @PlatformPermissions source
 WHERE NOT EXISTS(SELECT 1 FROM dbo.Permissions existing WHERE existing.Resource=source.Resource);
+
+UPDATE existing
+SET Module=source.Module,Action=source.Action,Description=source.Description
+FROM dbo.Permissions existing
+JOIN @PlatformPermissions source ON source.Resource=existing.Resource;
+
+-- Los permisos de la vista Usuarios se reutilizan en el tenant seleccionado.
+-- Retira la antigua segunda llave específica para usuarios de otros tenants.
+DELETE assignment
+FROM dbo.RolePermissions assignment
+JOIN dbo.Permissions permissionValue ON permissionValue.PermissionId=assignment.PermissionId
+WHERE permissionValue.Resource IN(N'tenants.users.read',N'tenants.users.manage');
+
+DELETE FROM dbo.Permissions
+WHERE Resource IN(N'tenants.users.read',N'tenants.users.manage');
 
 -- Elimina autoridad de plataforma heredada por roles de clientes.
 DELETE assignment

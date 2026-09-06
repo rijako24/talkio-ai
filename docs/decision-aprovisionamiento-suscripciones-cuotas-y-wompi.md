@@ -56,7 +56,7 @@ La invitación del administrador permanece vigente durante tres días completos 
 su creación. Si vence, la activación responde de forma explícita `InvitationExpired`
 y no oculta la causa como una invitación genéricamente inválida. Mientras el tenant
 no tenga administrador aceptado, plataforma puede reenviarla desde el detalle del
-tenant con `tenants.users.manage`: se reutilizan la misma invitación opaca y el mismo
+tenant con `tenants.read` y `users.create`: se reutilizan la misma invitación opaca y el mismo
 outbox de correo, se extiende su vigencia otros tres días y se audita
 `TenantInvitationResent`. Un reenvío nunca crea otro usuario ni otra ruta de alta.
 

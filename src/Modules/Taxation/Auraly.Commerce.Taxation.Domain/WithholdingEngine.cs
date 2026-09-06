@@ -5,6 +5,11 @@ public enum WithholdingDirection { Purchase, Sale }
 public enum WithholdingBaseKind { TaxExclusiveAmount, VatAmount }
 public enum WithholdingRecognitionMoment { Accrual, Payment }
 
+public static class TaxResponsibilityCodes
+{
+    public const string IncomeTaxSelfWithholder = "O-15";
+}
+
 public sealed record WithholdingRule(
     Guid RuleId,
     Guid BusinessId,
@@ -139,6 +144,12 @@ public sealed class WithholdingEngine
         if (!rule.IsActive || rule.BusinessId != context.BusinessId ||
             rule.Direction != context.Direction || rule.Moment != context.Moment)
             return false;
+        if (rule.Kind == WithholdingKind.IncomeTax &&
+            context.Direction == WithholdingDirection.Purchase &&
+            HasResponsibility(
+                context.CounterpartyResponsibilities,
+                TaxResponsibilityCodes.IncomeTaxSelfWithholder))
+            return false;
         if (date < rule.EffectiveFrom || rule.EffectiveTo is not null && date > rule.EffectiveTo)
             return false;
         if (context.PreviouslyRecognizedRuleIds.Contains(rule.RuleId)) return false;
@@ -159,6 +170,8 @@ public sealed class WithholdingEngine
 
     private static bool Same(string left, string? right) =>
         string.Equals(left, right?.Trim(), StringComparison.OrdinalIgnoreCase);
+    private static bool HasResponsibility(IEnumerable<string> responsibilities, string code) =>
+        responsibilities.Any(value => Same(code, value));
     private static decimal Money(decimal value) =>
         decimal.Round(value, 4, MidpointRounding.AwayFromZero);
 }

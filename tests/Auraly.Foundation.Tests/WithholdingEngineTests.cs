@@ -89,6 +89,70 @@ public sealed class WithholdingEngineTests
         Assert.Equal(2_500m, applied.Amount);
     }
 
+    [Theory]
+    [InlineData(100_000, 0)]
+    [InlineData(10_000_000, 200_000)]
+    public void Income_tax_is_not_withheld_from_a_self_withholding_supplier(
+        decimal subtotal, decimal minimum)
+    {
+        var rule = Rule(
+            WithholdingKind.IncomeTax, WithholdingBaseKind.TaxExclusiveAmount, 2.5m,
+            minimum: minimum);
+        var context = Context(subtotal, 0m, "11001") with
+        {
+            CounterpartyResponsibilities = new HashSet<string>(
+                [TaxResponsibilityCodes.IncomeTaxSelfWithholder],
+                StringComparer.OrdinalIgnoreCase)
+        };
+
+        var result = new WithholdingEngine().Calculate(context, [rule]);
+
+        Assert.Empty(result.Lines);
+        Assert.Equal(subtotal, result.NetAmount);
+        result.EnsureBalanced();
+    }
+
+    [Fact]
+    public void Self_withholding_supplier_can_still_have_vat_and_ica_withholdings()
+    {
+        var rules = new[]
+        {
+            Rule(WithholdingKind.IncomeTax, WithholdingBaseKind.TaxExclusiveAmount, 2.5m),
+            Rule(WithholdingKind.Vat, WithholdingBaseKind.VatAmount, 15m),
+            Rule(WithholdingKind.IndustryCommerce, WithholdingBaseKind.TaxExclusiveAmount, 1m, "11001")
+        };
+        var context = Context(100_000m, 19_000m, "11001") with
+        {
+            CounterpartyResponsibilities = new HashSet<string>(["o-15"])
+        };
+
+        var result = new WithholdingEngine().Calculate(context, rules);
+
+        Assert.DoesNotContain(result.Lines, line => line.Kind == WithholdingKind.IncomeTax);
+        Assert.Contains(result.Lines, line => line.Kind == WithholdingKind.Vat);
+        Assert.Contains(result.Lines, line => line.Kind == WithholdingKind.IndustryCommerce);
+        Assert.Equal(3_850m, result.WithholdingTotal);
+        result.EnsureBalanced();
+    }
+
+    [Fact]
+    public void Self_withholder_status_does_not_suppress_income_tax_withheld_by_a_customer()
+    {
+        var rule = Rule(
+            WithholdingKind.IncomeTax, WithholdingBaseKind.TaxExclusiveAmount, 2.5m,
+            direction: WithholdingDirection.Sale);
+        var context = Context(100_000m, 0m, "11001") with
+        {
+            Direction = WithholdingDirection.Sale,
+            CounterpartyResponsibilities = new HashSet<string>(
+                [TaxResponsibilityCodes.IncomeTaxSelfWithholder])
+        };
+
+        var result = new WithholdingEngine().Calculate(context, [rule]);
+
+        Assert.Equal(2_500m, Assert.Single(result.Lines).Amount);
+    }
+
     [Fact]
     public void Rejects_reteiva_configured_on_invoice_subtotal()
     {
@@ -99,9 +163,10 @@ public sealed class WithholdingEngineTests
     private static WithholdingRule Rule(
         WithholdingKind kind, WithholdingBaseKind basis, decimal rate,
         string? jurisdiction = null, decimal minimum = 0, string[]? responsibilities = null,
-        WithholdingRecognitionMoment moment = WithholdingRecognitionMoment.Accrual) =>
+        WithholdingRecognitionMoment moment = WithholdingRecognitionMoment.Accrual,
+        WithholdingDirection direction = WithholdingDirection.Purchase) =>
         WithholdingRule.Create(Guid.NewGuid(), BusinessId, 1, Guid.NewGuid().ToString("N")[..12],
-            kind.ToString(), kind, WithholdingDirection.Purchase, moment, basis, null, jurisdiction,
+            kind.ToString(), kind, direction, moment, basis, null, jurisdiction,
             rate, minimum, responsibilities, new DateOnly(2026, 1, 1), null, true);
 
     private static WithholdingCalculationContext Context(

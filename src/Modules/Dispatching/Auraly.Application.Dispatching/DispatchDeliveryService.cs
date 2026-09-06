@@ -19,7 +19,7 @@ public sealed class DispatchDeliveryService(IDispatchDeliveryStore store)
     public Task<IReadOnlyList<DispatchReasonOption>> ReasonsAsync(DispatchActorIdentity actor, string reasonType, CancellationToken ct)
     {
         RequireAny(actor, DispatchPermissionCodes.Read, DispatchPermissionCodes.ExecuteDeliveries, DispatchPermissionCodes.Settle);
-        if (reasonType is not ("NotDelivered" or "DeliveryReturn")) throw new DispatchValidationException("ReasonType is invalid.");
+        if (reasonType is not ("NotDelivered" or "DeliveryReturn")) throw new DispatchValidationException("El tipo de motivo no es válido.");
         return store.ReasonsAsync(actor, reasonType, ct);
     }
 

@@ -76,31 +76,31 @@ public sealed class InventoryQueryService(
         InventoryUserIdentity user, string reasonType, CancellationToken token = default)
     {
         if (user.BusinessId == Guid.Empty || string.IsNullOrWhiteSpace(reasonType) || reasonType.Trim().Length > 64)
-            throw new InventoryValidationException("A valid reason type is required.");
+            throw new InventoryValidationException("Se requiere un tipo de motivo válido.");
         return store.GetReasonsAsync(user, reasonType.Trim(), false, null, token);
     }
 
     public Task<InventoryReasonItem> SaveReasonAsync(InventoryUserIdentity user, Guid? inventoryReasonId, SaveInventoryReasonRequest request, CancellationToken token = default)
     {
         if (!user.Permissions.Contains(InventoryPermissionCodes.ManageReasons))
-            throw new InventoryForbiddenException($"Permission '{InventoryPermissionCodes.ManageReasons}' is required.");
+            throw new InventoryForbiddenException("No tienes permiso para administrar los motivos de inventario.");
         if (string.IsNullOrWhiteSpace(request.OperationType) || request.OperationType.Trim().Length > 64)
-            throw new InventoryValidationException("A valid reason type is required.");
+            throw new InventoryValidationException("Se requiere un tipo de motivo válido.");
         if (string.IsNullOrWhiteSpace(request.Name) || request.Name.Trim().Length > 120)
-            throw new InventoryValidationException("Reason name is required and cannot exceed 120 characters.");
+            throw new InventoryValidationException("El nombre del motivo es obligatorio y no puede superar 120 caracteres.");
         if (request.DisplayOrder is < 0 or > 9999)
-            throw new InventoryValidationException("Display order must be between 0 and 9999.");
+            throw new InventoryValidationException("El orden de visualización debe estar entre 0 y 9999.");
         var category = Normalize(request.CounterpartAccountingCategory);
         if (category?.Length > 64)
-            throw new InventoryValidationException("The accounting category cannot exceed 64 characters.");
+            throw new InventoryValidationException("La categoría contable no puede superar 64 caracteres.");
         if ((request.OperationType.Trim() is InventoryDocumentTypes.StockCount or
                 InventoryDocumentTypes.Adjustment or InventoryDocumentTypes.Damage) &&
             string.IsNullOrWhiteSpace(category))
             throw new InventoryValidationException(
-                "Stock counts, inventory adjustments and damages require an accounting counterpart category.");
+                "Los conteos, ajustes de inventario y averías requieren una categoría contable de contrapartida.");
         if (StringComparer.Ordinal.Equals(category, "Inventory"))
             throw new InventoryValidationException(
-                "The accounting counterpart category must be different from Inventory.");
+                "La categoría contable de contrapartida debe ser diferente de Inventario.");
         return store.SaveReasonAsync(user, inventoryReasonId, request with
         {
             OperationType = request.OperationType.Trim(),

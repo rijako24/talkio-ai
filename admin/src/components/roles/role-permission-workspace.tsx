@@ -23,19 +23,21 @@ type MenuRow = { section: string; name: string; href: string; permission: string
 const permissionScopes: Record<string, string[]> = {
   "/dashboard": ["dashboard."],
   "/dashboard/services": ["services."],
+  "/dashboard/service-invoices": ["service-invoices."],
   "/dashboard/products": ["catalog."],
   "/dashboard/parties": ["parties.", "customers.", "suppliers.", "sellers.", "carriers.", "employees.", "users."],
-  "/dashboard/routes": ["routes."],
+  "/dashboard/routes": ["routes.", "route-zones."],
   "/dashboard/products/pricing": ["pricing."],
   "/dashboard/products/price-segments": ["pricing.segments."],
   "/dashboard/promotions": ["promotions."],
-  "/pos": ["sales.", "pos.", "work_sessions.", "enrolled_devices.", "fiscal.pos."],
+  "/pos": ["sales.create", "sales.discount", "sales.change-price", "sales.reprint", "sales.lines.", "sales.drafts.", "sales.void", "pos.", "work-sessions.open", "work-sessions.read", "work-sessions.close", "work-sessions.cash.", "enrolled_devices.", "fiscal.pos."],
   "/dashboard/inventory": ["inventory."],
   "/dashboard/purchasing/goods-receipts": ["purchasing.goods-receipts."],
   "/dashboard/purchasing/purchase-orders": ["purchasing.purchase-orders."],
   "/dashboard/purchasing/purchase-returns": ["purchasing.purchase-returns."],
   "/dashboard/sales-returns": ["sales.returns."],
   "/dashboard/dispatches": ["dispatches."],
+  "/dashboard/deliveries": ["dispatches.delivery."],
   "/dashboard/reservations": ["reservations."],
   "/dashboard/agents": ["agents."],
   "/dashboard/channels": ["business_config."],
@@ -48,6 +50,15 @@ const permissionScopes: Record<string, string[]> = {
   "/dashboard/receivables": ["receivables."],
   "/dashboard/expenses": ["expenses."],
   "/dashboard/payroll": ["payroll."],
+  "/dashboard/accounting": ["accounting.", "commerce.taxation."],
+  "/dashboard/sales-debit-notes": ["sales.debit-notes."],
+  "/dashboard/cash-differences": ["work-sessions.differences.", "work-sessions.closures."],
+  "/dashboard/subscription": ["subscription."],
+  "/dashboard/reports/sales": ["sales.reports."],
+  "/dashboard/reports/sellers": ["sales.reports."],
+  "/dashboard/reports/customers": ["sales.reports."],
+  "/dashboard/reports/visits": ["sales.reports."],
+  "/dashboard/reports/supplier-impact": ["sales.reports."],
   "/dashboard/tenants": ["tenants."],
   "/dashboard/businesses": ["businesses."],
   "/dashboard/roles": ["roles.", "permissions."],
@@ -69,8 +80,17 @@ const actionLabels: Record<string, string> = {
   read: "Ver", create: "Crear", update: "Editar", delete: "Eliminar", confirm: "Confirmar",
   export: "Exportar", cancel: "Cancelar", send: "Enviar", manage: "Administrar",
   assign_role: "Asignar roles", remove_role: "Retirar roles", assign_permissions: "Asignar permisos",
-  confirm_manual: "Confirmar manualmente",
+  confirm_manual: "Confirmar manualmente", reset: "Restablecer credenciales",
 };
+
+function permissionViewLabel(resource: string) {
+  if (resource.startsWith("users.") || resource.startsWith("security.users.")) return "Terceros · Usuarios";
+  if (resource.startsWith("tenants.") || resource.startsWith("platform.")) return "Empresas";
+  if (resource.startsWith("accounting.") || resource.startsWith("commerce.taxation.")) return "Contabilidad";
+  if (resource.startsWith("fiscal.")) return "Configuración · DIAN";
+  if (resource.startsWith("masters.")) return "Configuración · Maestros";
+  return "Administración";
+}
 
 export function RolePermissionWorkspace({ roleId, cloneFromId, embedded = false, readOnly = false, onSaved, onClose }: { roleId?: string; cloneFromId?: string; embedded?: boolean; readOnly?: boolean; onSaved?: (roleId: string) => void; onClose?: () => void }) {
   const queryClient = useQueryClient();
@@ -159,11 +179,11 @@ export function RolePermissionWorkspace({ roleId, cloneFromId, embedded = false,
         const visible = Boolean(viewPermission && selected.has(viewPermission.permissionId));
         return <details key={row.href} className="group rounded-xl border bg-card" open={search.trim().length > 0}>
           <summary className="flex cursor-pointer list-none items-center gap-3 p-4"><Checkbox checked={visible} disabled={!viewPermission || isSystemRole} onCheckedChange={(checked) => toggleView(row, checked === true)} onClick={(event) => event.stopPropagation()} /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="font-medium">{row.name}</span><Badge variant="outline">{row.section}</Badge></div><p className="truncate text-xs text-muted-foreground">{row.href}</p></div><span className="text-xs text-muted-foreground">{actions.filter((item) => selected.has(item.permissionId)).length}/{actions.length} acciones</span><ChevronDown className="h-4 w-4 transition group-open:rotate-180" /></summary>
-          <div className="grid gap-2 border-t p-4 sm:grid-cols-2 lg:grid-cols-3">{actions.map((permission) => <label key={permission.permissionId} className="flex cursor-pointer items-start gap-3 rounded-lg border p-3 hover:bg-muted/40"><Checkbox checked={selected.has(permission.permissionId)} disabled={locked} onCheckedChange={(checked) => toggle(permission, checked === true)} /><span><span className="block text-sm font-medium">{actionLabels[permission.resource.split(".").at(-1)!] ?? permission.action}</span><span className="block text-xs text-muted-foreground">{permission.description ?? permission.resource}</span></span></label>)}</div>
+          <div className="grid gap-2 border-t p-4 sm:grid-cols-2 lg:grid-cols-3">{actions.map((permission) => { const translatedAction=actionLabels[permission.resource.split(".").at(-1)!]; return <label key={permission.permissionId} className="flex cursor-pointer items-start gap-3 rounded-lg border p-3 hover:bg-muted/40"><Checkbox checked={selected.has(permission.permissionId)} disabled={locked} onCheckedChange={(checked) => toggle(permission, checked === true)} /><span><span className="block text-sm font-medium">{translatedAction ?? permission.description ?? "Acción disponible"}</span>{translatedAction&&permission.description&&<span className="block text-xs text-muted-foreground">{permission.description}</span>}</span></label>; })}</div>
         </details>;
       })}
     </CardContent></Card>
-    {additional.length > 0 && <Card><CardHeader><CardTitle>Permisos transversales</CardTitle><p className="text-sm text-muted-foreground">Funciones reales del sistema que no corresponden a una vista independiente del menú.</p></CardHeader><CardContent className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{additional.map((permission) => <label key={permission.permissionId} className="flex gap-3 rounded-lg border p-3"><Checkbox checked={selected.has(permission.permissionId)} disabled={locked} onCheckedChange={(checked) => toggle(permission, checked === true)} /><span><span className="block text-sm font-medium">{permission.description ?? permission.resource}</span><span className="text-xs text-muted-foreground">{permission.resource}</span></span></label>)}</CardContent></Card>}
+    {additional.length > 0 && <Card><CardHeader><CardTitle>Otras acciones por vista</CardTitle><p className="text-sm text-muted-foreground">Cada acción se muestra con la vista administrativa donde se utiliza.</p></CardHeader><CardContent className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{additional.map((permission) => <label key={permission.permissionId} className="flex gap-3 rounded-lg border p-3"><Checkbox checked={selected.has(permission.permissionId)} disabled={locked} onCheckedChange={(checked) => toggle(permission, checked === true)} /><span><span className="block text-sm font-medium">{permission.description ?? "Acción disponible"}</span><span className="text-xs text-muted-foreground">Vista: {permissionViewLabel(permission.resource)}</span></span></label>)}</CardContent></Card>}
   </div>;
 }
 

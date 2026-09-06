@@ -22,6 +22,8 @@ namespace Auraly.ServerSlice.IntegrationTests;
 [Collection(ServerSliceCollection.Name)]
 public sealed class TenantProvisioningTests(ServerSliceFixture fixture)
 {
+    private static readonly Guid AuralyTenantId =
+        Guid.Parse("A0A10000-0000-0000-0000-000000000000");
     private const string Password = "Auraly-New-Tenant-2026!";
 
     [Fact]
@@ -169,8 +171,10 @@ public sealed class TenantProvisioningTests(ServerSliceFixture fixture)
             "Sede principal", "Calle 1 # 2-3", "3001234567", $"sede-{suffix}@auraly.test",
             "America/Bogota", "LatestReceiptCost", email, 10, 3);
 
-        using var admin = fixture.CreateAdminClient(
-            "tenants.create", "tenants.update", "tenants.users.manage",
+        var platformUserId = await CreatePlatformAdministratorAsync();
+        using var admin = fixture.CreateTenantUserClient(
+            AuralyTenantId, platformUserId,
+            "tenants.create", "tenants.update", "tenants.read", "users.create",
             "tenants.provisioning.payment.waive");
         using var created = await admin.PostAsJsonAsync("/api/v1/tenants", Waived(request));
         var creationBody = await created.Content.ReadAsStringAsync();
@@ -310,6 +314,7 @@ public sealed class TenantProvisioningTests(ServerSliceFixture fixture)
             Assert.Contains("expiró", await expired.Content.ReadAsStringAsync(),
                 StringComparison.OrdinalIgnoreCase);
         }
+        admin.DefaultRequestHeaders.Add("X-Tenant-Id", result.TenantId.ToString("D"));
         using (var resent = await admin.PostAsync(
                    $"/api/v1/tenants/{result.TenantId:D}/administrator-invitation/resend",
                    null))
@@ -1123,6 +1128,34 @@ public sealed class TenantProvisioningTests(ServerSliceFixture fixture)
         command.Parameters.AddWithValue("@Provider", providerTransactionId);
         command.Parameters.AddWithValue("@Status", (int)PaymentTransactionStatus.Confirmed);
         Assert.Equal(1, await command.ExecuteNonQueryAsync());
+    }
+
+    private async Task<Guid> CreatePlatformAdministratorAsync()
+    {
+        var userId = Guid.NewGuid();
+        await using var connection = new SqlConnection(fixture.ConnectionString);
+        await connection.OpenAsync();
+        await using var command = new SqlCommand("""
+            DECLARE @RoleId UNIQUEIDENTIFIER=(
+                SELECT RoleId FROM dbo.AppRoles
+                WHERE TenantId=@TenantId AND NormalizedName=N'ADMINISTRATOR');
+            IF @RoleId IS NULL
+                THROW 51000,N'No existe el administrador canónico de Auraly.',1;
+            INSERT dbo.AppUsers(
+                UserId,TenantId,Username,NormalizedUsername,Email,NormalizedEmail,
+                FirstName,LastName,IsActive,EmailConfirmed,CreatedAt)
+            VALUES(
+                @UserId,@TenantId,CONCAT(N'platform-',@UserId),
+                UPPER(CONCAT(N'platform-',@UserId)),CONCAT(@UserId,N'@auraly.test'),
+                UPPER(CONCAT(@UserId,N'@auraly.test')),N'Administrador',N'Auraly',
+                1,1,SYSUTCDATETIME());
+            INSERT dbo.UserRoles(UserRoleId,UserId,RoleId,BusinessId,AssignedAt)
+            VALUES(NEWID(),@UserId,@RoleId,NULL,SYSUTCDATETIME());
+            """, connection);
+        command.Parameters.AddWithValue("@UserId", userId);
+        command.Parameters.AddWithValue("@TenantId", AuralyTenantId);
+        await command.ExecuteNonQueryAsync();
+        return userId;
     }
 
     private sealed class FixedFiscalTechnicalKeyProvider(FiscalVerificationMaterial value)
