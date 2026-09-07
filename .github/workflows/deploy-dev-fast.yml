@@ -2,6 +2,12 @@ name: Deploy DEV fast
 
 on:
   workflow_dispatch:
+    inputs:
+      configure_push_url_only:
+        description: Configurar solo la URL pública de Web Push en DEV
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -20,10 +26,12 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-dotnet@v4
+        if: ${{ !inputs.configure_push_url_only }}
         with:
           dotnet-version: 8.0.x
 
       - name: Build database package
+        if: ${{ !inputs.configure_push_url_only }}
         shell: pwsh
         run: dotnet build database/Auraly.Database/Auraly.Database.sqlproj --configuration Release
 
@@ -35,6 +43,7 @@ jobs:
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Apply DEV administrator recovery
+        if: ${{ !inputs.configure_push_url_only }}
         shell: pwsh
         env:
           AURALY_BOOTSTRAP_ADMIN_PASSWORD_HASH: ${{ secrets.AURALY_BOOTSTRAP_ADMIN_PASSWORD_HASH }}

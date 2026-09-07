@@ -240,6 +240,8 @@ public sealed class ServerSliceArchitectureTests
         Assert.Contains("Notifications__WebPush__PublicAppUrl", template, StringComparison.Ordinal);
         Assert.Contains("environment == 'prod' ? 'https://auralyapp.co' : 'https://${staticAdmin.properties.defaultHostname}'", template, StringComparison.Ordinal);
         Assert.Contains("Notifications__WebPush__PublicAppUrl=https://proud-moss-0d9cf540f.7.azurestaticapps.net", fastWorkflow, StringComparison.Ordinal);
+        Assert.Contains("configure_push_url_only", fastWorkflow, StringComparison.Ordinal);
+        Assert.Contains("if: ${{ !inputs.configure_push_url_only }}", fastWorkflow, StringComparison.Ordinal);
         Assert.True(
             fastWorkflow.IndexOf("Configure DEV Web Push application URL", StringComparison.Ordinal) <
             fastWorkflow.IndexOf("if: ${{ false }}", StringComparison.Ordinal),
