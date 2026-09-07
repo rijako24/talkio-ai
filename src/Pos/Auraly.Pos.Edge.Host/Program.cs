@@ -197,7 +197,14 @@ public static class PosEdgeHostApplication
             sp.GetRequiredService<PosWarehousePolicySink>());
         builder.Services.AddSingleton<PosCatalogSynchronizer>();
         builder.Services.AddSingleton<PosIdentitySynchronizer>();
+        builder.Services.AddSingleton(new PosCustomerGeographyStore(connectionString));
         builder.Services.AddSingleton<PosCustomerServerClient>();
+        builder.Services.AddSingleton(sp => new PosCustomerOutboxStore(
+            connectionString,
+            sp.GetRequiredService<IAuralyIdGenerator>(),
+            sp.GetRequiredService<TimeProvider>(),
+            sp.GetRequiredService<PosOperationalScope>()));
+        builder.Services.AddSingleton<PosCustomerOutboxUploader>();
         builder.Services.AddSingleton<PosProductAvailabilityServerClient>();
         builder.Services.AddSingleton<PosRemoteApprovalClient>();
         builder.Services.AddSingleton<PosSensitiveActionAuthorizer>();
@@ -709,6 +716,7 @@ public static class PosEdgeHostApplication
             PosEdgeSaleStore sales,
             PosCashMovementStore cashMovements,
             PosOfflineWorkSessionClosureStore closures,
+            PosCustomerOutboxStore customers,
             PosSaleHostSettings saleSettings,
             PosSynchronizationState synchronizationState,
             TimeProvider timeProvider,
@@ -720,18 +728,22 @@ public static class PosEdgeHostApplication
             var saleOutbox = await sales.ReadOutboxStatusAsync(ct);
             var cashOutbox = await cashMovements.ReadOutboxStatusAsync(ct);
             var closureOutbox = await closures.ReadStatusAsync(ct);
+            var customerOutbox = await customers.ReadStatusAsync(ct);
             var pendingSynchronizationCount =
-                saleOutbox.PendingCount + cashOutbox.PendingCount + closureOutbox.PendingCount;
+                saleOutbox.PendingCount + cashOutbox.PendingCount + closureOutbox.PendingCount +
+                customerOutbox.PendingCount;
             var oldestPendingSynchronizationAt = new[]
                 {
                     saleOutbox.OldestPendingAt,
                     cashOutbox.OldestPendingAt,
-                    closureOutbox.OldestPendingAt
+                    closureOutbox.OldestPendingAt,
+                    customerOutbox.OldestPendingAt
                 }
                 .Where(value => value is not null)
                 .Min();
             var lastSynchronizationError = closureOutbox.LastError
                 ?? cashOutbox.LastError
+                ?? customerOutbox.LastError
                 ?? saleOutbox.LastError;
             var user = await identities.ResolveAsync(
                 http.Request.Headers["X-Auraly-User-Session"].ToString(), ct);
@@ -886,18 +898,21 @@ public static class PosEdgeHostApplication
             CancellationToken ct) => Results.Ok(await server.CitiesAsync(divisionId, ct)));
         edge.MapPost("/customers", async (
             PosCreateCustomerInput request,
-            PosCustomerServerClient server,
+            PosCustomerOutboxStore customers,
             PosLocalSessionAccessor sessions,
+            PosSynchronizationSignal synchronization,
             PosSynchronizationEventLog events,
             CancellationToken ct) =>
         {
-            if (!sessions.Required().Permissions.Contains(PartyPermissionCodes.PosCustomerCreate))
+            var user = sessions.Required();
+            if (!user.Permissions.Contains(PartyPermissionCodes.PosCustomerCreate))
                 return Results.Forbid();
-            events.Record("Info", "Cliente", "Creando cliente", request.DisplayName);
-            var customer = await server.CreateAsync(request, ct);
-            events.Record("Success", "Cliente", $"Cliente creado: {customer.Name}",
+            var customer = await customers.QueueAsync(request, user.WorkSessionId, ct);
+            events.Record("Success", "Cliente", $"Cliente creado localmente: {customer.Name}",
                 customer.Identification);
-            return Results.Ok(customer);
+            synchronization.Signal(PosSynchronizationTrigger.LocalOutbox);
+            return Results.Accepted(
+                $"/edge/v1/customers/{customer.CustomerId:D}", customer);
         });
         edge.MapGet("/customers/{customerId:guid}", async (
             Guid customerId,

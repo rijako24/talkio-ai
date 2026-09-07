@@ -627,6 +627,7 @@ public sealed class PosEdgeSaleStore
             .Where(row => row.Type != PosOutboxMessageTypes.WorkSessionOpened &&
                           row.Type != PosOutboxMessageTypes.CashMovement &&
                           row.Type != PosOutboxMessageTypes.WorkSessionClosure &&
+                          row.Type != PosOutboxMessageTypes.CustomerCreated &&
                           (row.Status == PosOutboxStatus.Pending ||
                            row.Status == PosOutboxStatus.RetryScheduled))
             .OrderBy(row => row.LocalSequence)
@@ -662,6 +663,7 @@ public sealed class PosEdgeSaleStore
             .Where(row => row.Type != PosOutboxMessageTypes.WorkSessionOpened &&
                           row.Type != PosOutboxMessageTypes.CashMovement &&
                           row.Type != PosOutboxMessageTypes.WorkSessionClosure &&
+                          row.Type != PosOutboxMessageTypes.CustomerCreated &&
                           row.Status != PosOutboxStatus.Uploaded)
             .Select(row => new { row.CreatedAt, row.LastError })
             .ToArrayAsync(cancellationToken);
@@ -681,6 +683,7 @@ public sealed class PosEdgeSaleStore
             .Where(row => row.Type != PosOutboxMessageTypes.WorkSessionOpened &&
                           row.Type != PosOutboxMessageTypes.CashMovement &&
                           row.Type != PosOutboxMessageTypes.WorkSessionClosure &&
+                          row.Type != PosOutboxMessageTypes.CustomerCreated &&
                           row.Status != PosOutboxStatus.Uploaded &&
                           row.WorkSessionId == workSessionId)
             .AnyAsync(cancellationToken);

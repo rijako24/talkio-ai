@@ -23,49 +23,53 @@ public sealed class PosCustomerServerClient(
     HttpClient http,
     PosDeviceCredentials credentials,
     PosOperationalScope scope,
-    PosCatalogSynchronizer synchronization,
-    PosCatalogStore catalog)
+    PosCustomerGeographyStore geography)
 {
-    public Task<IReadOnlyCollection<CountryItem>> CountriesAsync(CancellationToken ct) =>
-        GetAsync<IReadOnlyCollection<CountryItem>>(
-            $"/api/pos/v1/customers/geography/countries?businessId={scope.BusinessId:D}", ct);
-
-    public Task<IReadOnlyCollection<AdministrativeDivisionItem>> DivisionsAsync(Guid countryId, CancellationToken ct) =>
-        GetAsync<IReadOnlyCollection<AdministrativeDivisionItem>>(
-            $"/api/pos/v1/customers/geography/countries/{countryId:D}/divisions?businessId={scope.BusinessId:D}", ct);
-
-    public Task<IReadOnlyCollection<CityItem>> CitiesAsync(Guid divisionId, CancellationToken ct) =>
-        GetAsync<IReadOnlyCollection<CityItem>>(
-            $"/api/pos/v1/customers/geography/divisions/{divisionId:D}/cities?businessId={scope.BusinessId:D}", ct);
-
-    public async Task<PosCustomerPricing> CreateAsync(PosCreateCustomerInput input, CancellationToken ct)
+    public async Task<IReadOnlyCollection<CountryItem>> CountriesAsync(CancellationToken ct)
     {
-        var request = new CreateCustomerRequest(
-            Guid.NewGuid(),
-            scope.BusinessId,
-            new PartyInput(
-                input.PartyType,
-                input.IdentificationCountryId,
-                input.IdentificationTypeCode,
-                input.Identification,
-                input.VerificationDigit,
-                input.DisplayName,
-                input.LegalName,
-                input.FirstName,
-                input.LastName,
-                input.Email,
-                input.Phone),
-            input.PrimarySite,
-            null);
-        using var message = DeviceRequest(HttpMethod.Post, "/api/pos/v1/customers");
-        message.Content = JsonContent.Create(request);
-        using var response = await http.SendAsync(message, ct);
-        await EnsureSuccessAsync(response, ct);
-        var created = await response.Content.ReadFromJsonAsync<CustomerDetail>(cancellationToken: ct)
-            ?? throw new InvalidDataException("Auraly Server returned an empty customer.");
-        await synchronization.SynchronizeAsync(ct);
-        return await catalog.GetCustomerAsync(created.CustomerId, ct)
-            ?? throw new InvalidDataException("The created customer was not synchronized to POS Edge.");
+        try
+        {
+            var values = await GetAsync<IReadOnlyCollection<CountryItem>>(
+                $"/api/pos/v1/customers/geography/countries?businessId={scope.BusinessId:D}", ct);
+            return values;
+        }
+        catch (HttpRequestException)
+        {
+            return await geography.CountriesAsync(ct);
+        }
+    }
+
+    public async Task<IReadOnlyCollection<AdministrativeDivisionItem>> DivisionsAsync(Guid countryId, CancellationToken ct)
+    {
+        try
+        {
+            return await GetAsync<IReadOnlyCollection<AdministrativeDivisionItem>>(
+                $"/api/pos/v1/customers/geography/countries/{countryId:D}/divisions?businessId={scope.BusinessId:D}", ct);
+        }
+        catch (HttpRequestException)
+        {
+            return await geography.DivisionsAsync(countryId, ct);
+        }
+    }
+
+    public async Task<IReadOnlyCollection<CityItem>> CitiesAsync(Guid divisionId, CancellationToken ct)
+    {
+        try
+        {
+            return await GetAsync<IReadOnlyCollection<CityItem>>(
+                $"/api/pos/v1/customers/geography/divisions/{divisionId:D}/cities?businessId={scope.BusinessId:D}", ct);
+        }
+        catch (HttpRequestException)
+        {
+            return await geography.CitiesAsync(divisionId, ct);
+        }
+    }
+
+    public async Task RefreshGeographyAsync(CancellationToken ct)
+    {
+        var values = await GetAsync<IReadOnlyCollection<GeographyHierarchyItem>>(
+            $"/api/pos/v1/customers/geography/hierarchy?businessId={scope.BusinessId:D}", ct);
+        await geography.ReplaceAsync(values, ct);
     }
 
     private async Task<T> GetAsync<T>(string uri, CancellationToken ct)

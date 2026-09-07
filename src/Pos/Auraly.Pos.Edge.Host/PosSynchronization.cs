@@ -68,10 +68,12 @@ public sealed class PosSynchronizationSignal
 internal sealed class PosSynchronizationWork(
     PosIdentitySynchronizer identities,
     PosCatalogSynchronizer catalog,
+    PosCustomerServerClient customerDirectory,
     PosEdgeOutboxUploader uploader,
     PosCashMovementServerClient cashMovements,
     PosWorkSessionClosureUploader closures,
     PosWorkSessionOpenUploader workSessionOpenings,
+    PosCustomerOutboxUploader customers,
     PosUnifiedOutboxDispatcher outbox,
     PosFiscalStatusSynchronizer fiscalStatuses,
     PosFiscalProvisioningSynchronizer fiscalProvisioning,
@@ -112,6 +114,8 @@ internal sealed class PosSynchronizationWork(
                                     await cashMovements.UploadNextAsync(cancellationToken),
                                 PosUnifiedOutboxRoute.WorkSessionClosure =>
                                     await closures.UploadNextAsync(cancellationToken),
+                                PosUnifiedOutboxRoute.CustomerCreated =>
+                                    await customers.UploadNextAsync(cancellationToken),
                                 _ => throw new ArgumentOutOfRangeException(nameof(route))
                             };
                             processed++;
@@ -136,7 +140,11 @@ internal sealed class PosSynchronizationWork(
                 pending.Add(new PosSynchronizationLane(
                     PosSynchronizationTrigger.Catalog,
                     "catálogo",
-                    () => catalog.SynchronizeAsync(cancellationToken)));
+                    async () =>
+                    {
+                        await catalog.SynchronizeAsync(cancellationToken);
+                        await customerDirectory.RefreshGeographyAsync(cancellationToken);
+                    }));
                 pending.Add(new PosSynchronizationLane(
                     PosSynchronizationTrigger.Catalog,
                     "motivos de caja",

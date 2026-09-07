@@ -69,7 +69,8 @@ public sealed record CreateCustomerRequest(
     PartySiteInput PrimarySite,
     CustomerPricingInput? Pricing,
     bool RequiresElectronicInvoice = false,
-    IReadOnlyCollection<PartySiteInput>? AdditionalSites = null);
+    IReadOnlyCollection<PartySiteInput>? AdditionalSites = null,
+    Guid? RequestedCustomerId = null);
 
 public sealed record AddPartySiteRequest(Guid OperationId, PartySiteInput Site);
 public sealed record UpdatePartySiteRequest(PartySiteInput Site, string RowVersion);

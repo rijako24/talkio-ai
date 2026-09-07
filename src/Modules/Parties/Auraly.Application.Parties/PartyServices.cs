@@ -83,8 +83,15 @@ public sealed class PartyService(IPartyStore store, IAuralyIdGenerator ids, Time
     private async Task<CustomerDetail> CreateAndNotifyAsync(
         PartyActorIdentity actor, CreateCustomerRequest request, string normalized, CancellationToken ct)
     {
+        if (request.RequestedCustomerId == Guid.Empty)
+            throw new PartyValidationException("RequestedCustomerId must be null or a valid identifier.");
+        if (!actor.IsDevice && request.RequestedCustomerId is not null)
+            throw new PartyForbiddenException("Only an enrolled POS device can reserve a customer identifier.");
+        var customerId = actor.IsDevice && request.RequestedCustomerId is { } requestedCustomerId
+            ? requestedCustomerId
+            : ids.NewId();
         var customer = await store.CreateCustomerAsync(
-            actor, ids.NewId(), ids.NewId(), ids.NewId(), request, normalized, time.GetUtcNow(), ct);
+            actor, ids.NewId(), customerId, ids.NewId(), request, normalized, time.GetUtcNow(), ct);
         await synchronization.DispatchPendingAsync(actor.TenantId, actor.BusinessId, CancellationToken.None);
         return customer;
     }

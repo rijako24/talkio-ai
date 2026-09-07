@@ -161,9 +161,11 @@ public static class PosOutboxMessageTypes
     public const string WorkSessionOpened = "work-session.opened";
     public const string CashMovement = "cash.movement.confirmed";
     public const string WorkSessionClosure = "work-session.closed";
+    public const string CustomerCreated = "customer.created";
 
     public static bool IsLocalSale(string type) =>
         !string.Equals(type, WorkSessionOpened, StringComparison.Ordinal) &&
         !string.Equals(type, CashMovement, StringComparison.Ordinal) &&
-        !string.Equals(type, WorkSessionClosure, StringComparison.Ordinal);
+        !string.Equals(type, WorkSessionClosure, StringComparison.Ordinal) &&
+        !string.Equals(type, CustomerCreated, StringComparison.Ordinal);
 }

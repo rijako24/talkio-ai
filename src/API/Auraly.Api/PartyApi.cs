@@ -123,6 +123,11 @@ public static class PartyApi
             await Handle(async () => Results.Ok(await service.CountriesAsync(
                 context.User.ToPartyDeviceIdentity(businessId), false, ct))));
 
+        pos.MapGet("/geography/hierarchy", async (
+            HttpContext context, GeographyService service, Guid businessId, CancellationToken ct) =>
+            await Handle(async () => Results.Ok(await service.HierarchyAsync(
+                context.User.ToPartyDeviceIdentity(businessId), false, ct))));
+
         pos.MapGet("/geography/countries/{countryId:guid}/divisions", async (
             HttpContext context, GeographyService service, Guid businessId, Guid countryId, CancellationToken ct) =>
             await Handle(async () => Results.Ok(await service.DivisionsAsync(

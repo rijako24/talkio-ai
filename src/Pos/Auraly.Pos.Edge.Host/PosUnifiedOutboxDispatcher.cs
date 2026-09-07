@@ -8,7 +8,8 @@ public enum PosUnifiedOutboxRoute
     WorkSessionOpened,
     Sale,
     CashMovement,
-    WorkSessionClosure
+    WorkSessionClosure,
+    CustomerCreated
 }
 
 public sealed class PosUnifiedOutboxDispatcher(
@@ -46,6 +47,7 @@ public sealed class PosUnifiedOutboxDispatcher(
             PosOutboxMessageTypes.WorkSessionOpened => PosUnifiedOutboxRoute.WorkSessionOpened,
             PosOutboxMessageTypes.CashMovement => PosUnifiedOutboxRoute.CashMovement,
             PosOutboxMessageTypes.WorkSessionClosure => PosUnifiedOutboxRoute.WorkSessionClosure,
+            PosOutboxMessageTypes.CustomerCreated => PosUnifiedOutboxRoute.CustomerCreated,
             _ => PosUnifiedOutboxRoute.Sale
         };
     }

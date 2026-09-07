@@ -301,6 +301,20 @@ public sealed class PartyCustomerVerticalSliceTests(ServerSliceFixture fixture)
         Assert.NotNull(found);
         Assert.Equal(created.CustomerId, found.CustomerId);
 
+        var reservedCustomerId = Guid.NewGuid();
+        var reservedRequest = request with
+        {
+            OperationId = reservedCustomerId,
+            Party = request.Party with { Identification = "55667789" },
+            RequestedCustomerId = reservedCustomerId
+        };
+        using var reservedResponse = await pos.PostAsJsonAsync(
+            "/api/pos/v1/customers", reservedRequest);
+        reservedResponse.EnsureSuccessStatusCode();
+        var reserved = await reservedResponse.Content.ReadFromJsonAsync<CustomerDetail>();
+        Assert.NotNull(reserved);
+        Assert.Equal(reservedCustomerId, reserved.CustomerId);
+
         var priceChannelId = Guid.NewGuid();
         await ExecuteAsync(
             """

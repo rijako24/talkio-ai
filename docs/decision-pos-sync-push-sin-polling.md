@@ -62,6 +62,17 @@ efectivo crea un cambio vendible.
 
 Un vínculo previo con otro negocio nunca impide venderle al cliente.
 
+La creación rápida desde una caja es local-first. POS Edge reserva el
+`CustomerId`, guarda en la misma transacción SQLite la proyección mínima del
+cliente y un mensaje `customer.created` en la outbox unificada. El servidor
+acepta ese identificador únicamente de un dispositivo enrolado y usa
+`OperationId` para hacer idempotente cualquier reintento. Al reconectar, la
+outbox sube primero el cliente, el servidor publica `Customers` y el snapshot
+autoritativo reemplaza la proyección provisional sin cambiar el identificador.
+El catálogo geográfico necesario para el formulario también se conserva
+localmente y se renueva con la sincronización de catálogo; por eso país,
+división y ciudad no dependen de red durante la captura offline.
+
 ### Security
 
 - usuario habilitado para login offline;
