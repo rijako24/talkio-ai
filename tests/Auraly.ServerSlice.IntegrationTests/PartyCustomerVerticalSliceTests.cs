@@ -294,6 +294,11 @@ public sealed class PartyCustomerVerticalSliceTests(ServerSliceFixture fixture)
         var countries = await pos.GetFromJsonAsync<IReadOnlyCollection<CountryItem>>(
             $"/api/pos/v1/customers/geography/countries?businessId={fixture.BusinessId:D}");
         Assert.Contains(countries!, item => item.CountryId == countryId);
+        var hierarchy = await pos.GetFromJsonAsync<IReadOnlyCollection<GeographyHierarchyItem>>(
+            $"/api/pos/v1/customers/geography/hierarchy?businessId={fixture.BusinessId:D}");
+        Assert.Contains(hierarchy!, item => item.Id == countryId && item.Level == "Country");
+        Assert.Contains(hierarchy!, item => item.Id == divisionId && item.ParentId == countryId);
+        Assert.Contains(hierarchy!, item => item.Id == cityId && item.ParentId == divisionId);
 
         var found = await pos.GetFromJsonAsync<CustomerDetail>(
             $"/api/pos/v1/customers/by-identification?businessId={fixture.BusinessId:D}&countryId={countryId:D}" +

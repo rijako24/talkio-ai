@@ -30,7 +30,7 @@ public sealed class GeographyService(IPartyStore store, IAuralyIdGenerator ids, 
     public Task<IReadOnlyCollection<GeographyHierarchyItem>> HierarchyAsync(
         PartyActorIdentity actor, bool includeInactive, CancellationToken ct)
     {
-        PartyService.Require(actor, PartyPermissionCodes.GeographyRead);
+        PartyService.RequireUserOrEnrolledDevice(actor, PartyPermissionCodes.GeographyRead);
         return store.GeographyHierarchyAsync(includeInactive, ct);
     }
 

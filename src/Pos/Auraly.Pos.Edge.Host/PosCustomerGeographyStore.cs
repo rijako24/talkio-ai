@@ -1,5 +1,6 @@
 using Auraly.Contracts.Parties;
 using Microsoft.Data.Sqlite;
+using System.Text.Json;
 
 namespace Auraly.Pos.Edge.Host;
 
@@ -19,21 +20,25 @@ public sealed class PosCustomerGeographyStore(string connectionString)
             clear.CommandText = "DELETE FROM PosCustomerGeography;";
             await clear.ExecuteNonQueryAsync(cancellationToken);
         }
-        foreach (var item in hierarchy)
+        await using (var insert = connection.CreateCommand())
         {
-            await using var insert = connection.CreateCommand();
             insert.Transaction = transaction;
             insert.CommandText = """
                 INSERT INTO PosCustomerGeography(Id,ParentId,Level,Code,Name,IsActive)
-                VALUES($id,$parent,$level,$code,$name,$active);
+                SELECT
+                  json_extract(value,'$.id'),
+                  json_extract(value,'$.parentId'),
+                  json_extract(value,'$.level'),
+                  json_extract(value,'$.code'),
+                  json_extract(value,'$.name'),
+                  CASE json_extract(value,'$.isActive') WHEN 1 THEN 1 ELSE 0 END
+                FROM json_each($hierarchy);
                 """;
-            insert.Parameters.AddWithValue("$id", item.Id.ToString("D"));
             insert.Parameters.AddWithValue(
-                "$parent", item.ParentId is { } parent ? parent.ToString("D") : DBNull.Value);
-            insert.Parameters.AddWithValue("$level", item.Level);
-            insert.Parameters.AddWithValue("$code", item.Code);
-            insert.Parameters.AddWithValue("$name", item.Name);
-            insert.Parameters.AddWithValue("$active", item.IsActive ? 1 : 0);
+                "$hierarchy",
+                JsonSerializer.Serialize(
+                    hierarchy,
+                    new JsonSerializerOptions(JsonSerializerDefaults.Web)));
             await insert.ExecuteNonQueryAsync(cancellationToken);
         }
         await transaction.CommitAsync(cancellationToken);
