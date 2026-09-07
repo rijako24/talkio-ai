@@ -47,6 +47,8 @@ jobs:
 
       - name: Deploy tenant fiscal schema to DEV
         shell: pwsh
+        env:
+          AURALY_BOOTSTRAP_ADMIN_PASSWORD_HASH: ${{ secrets.AURALY_BOOTSTRAP_ADMIN_PASSWORD_HASH }}
         run: |
           $ErrorActionPreference = 'Stop'
           $rule = "github-fast-$([guid]::NewGuid().ToString('N').Substring(0,10))"
@@ -70,7 +72,8 @@ jobs:
               $connection.Dispose()
             }
 
-            & "$HOME\.dotnet\tools\sqlpackage.exe" /Action:Publish /SourceFile:database/Auraly.Database/bin/Release/Auraly.Database.dacpac /TargetServerName:tcp:sql-auraly-dev-w5usmo6w.database.windows.net,1433 /TargetDatabaseName:auraly-dev /AccessToken:$token /p:BlockOnPossibleDataLoss=True /p:DropObjectsNotInSource=False /p:CommandTimeout=120 /TargetTimeout:60
+            if ([string]::IsNullOrWhiteSpace($env:AURALY_BOOTSTRAP_ADMIN_PASSWORD_HASH)) { throw 'AURALY_BOOTSTRAP_ADMIN_PASSWORD_HASH is unavailable.' }
+            & "$HOME\.dotnet\tools\sqlpackage.exe" /Action:Publish /SourceFile:database/Auraly.Database/bin/Release/Auraly.Database.dacpac /TargetServerName:tcp:sql-auraly-dev-w5usmo6w.database.windows.net,1433 /TargetDatabaseName:auraly-dev /AccessToken:$token /v:DeploymentEnvironment=dev /v:BootstrapAdminPasswordHash="$($env:AURALY_BOOTSTRAP_ADMIN_PASSWORD_HASH)" /p:BlockOnPossibleDataLoss=True /p:DropObjectsNotInSource=False /p:CommandTimeout=120 /TargetTimeout:60
             if ($LASTEXITCODE) { throw 'Database deployment failed.' }
           } finally {
             az sql server firewall-rule delete --resource-group RG-AURALY-DEV --server sql-auraly-dev-w5usmo6w --name $rule --output none 2>$null

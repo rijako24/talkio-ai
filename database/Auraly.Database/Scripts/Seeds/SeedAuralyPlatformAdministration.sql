@@ -111,4 +111,62 @@ SET Username=CONCAT(N'retired-',LEFT(REPLACE(CONVERT(NVARCHAR(36),userValue.User
 FROM dbo.AppUsers userValue
 JOIN @RetiredUsers retired ON retired.UserId=userValue.UserId;
 PRINT N'SeedAuralyPlatformAdministration: rol y permisos de plataforma listos; identidades técnicas retiradas.';
+
+-- Excepción operativa temporal solicitada para certificar POS y push en DEV.
+-- PROD continúa sin identidad técnica. Retirar esta excepción cuando exista una
+-- cuenta humana de plataforma disponible para las pruebas de aceptación.
+IF LOWER(N'$(DeploymentEnvironment)')=N'dev'
+BEGIN
+    DECLARE @DevAdminPasswordHash NVARCHAR(500)=NULLIF(N'$(BootstrapAdminPasswordHash)',N'');
+    IF @DevAdminPasswordHash IS NULL
+        THROW 51001, 'La recuperación temporal de @auraly/admin requiere BootstrapAdminPasswordHash.', 1;
+
+    DECLARE @DevAdminUserId UNIQUEIDENTIFIER;
+    SELECT TOP(1) @DevAdminUserId=userValue.UserId
+    FROM dbo.AppUsers userValue
+    JOIN @RetiredUsers retired ON retired.UserId=userValue.UserId
+    WHERE userValue.TenantId=@AuralyTenantId
+    ORDER BY userValue.CreatedAt;
+
+    IF @DevAdminUserId IS NULL
+        SELECT TOP(1) @DevAdminUserId=userValue.UserId
+        FROM dbo.AppUsers userValue
+        WHERE userValue.TenantId=@AuralyTenantId
+          AND userValue.IsActive=0
+          AND userValue.NormalizedUsername LIKE N'RETIRED-%'
+          AND userValue.NormalizedEmail LIKE N'RETIRED+%@INVALID.AURALY.LOCAL'
+        ORDER BY userValue.CreatedAt;
+
+    IF @DevAdminUserId IS NULL
+    BEGIN
+        SET @DevAdminUserId=NEWID();
+        INSERT dbo.AppUsers(
+            UserId,TenantId,Username,NormalizedUsername,Email,NormalizedEmail,
+            PasswordHash,FirstName,LastName,AccessFailedCount,EmailConfirmed,
+            IsActive,CreatedAt)
+        VALUES(
+            @DevAdminUserId,@AuralyTenantId,N'admin',N'ADMIN',N'admin@auraly.ai',N'ADMIN@AURALY.AI',
+            @DevAdminPasswordHash,N'Administrador',N'Dev',0,1,1,SYSUTCDATETIME());
+    END
+    ELSE
+    BEGIN
+        UPDATE dbo.AppUsers
+        SET Username=N'admin',NormalizedUsername=N'ADMIN',
+            Email=N'admin@auraly.ai',NormalizedEmail=N'ADMIN@AURALY.AI',
+            PasswordHash=@DevAdminPasswordHash,
+            PosOfflinePasswordSalt=NULL,PosOfflinePasswordHash=NULL,
+            PosOfflinePasswordIterations=NULL,PosOfflinePasswordChangedAt=NULL,
+            FirstName=N'Administrador',LastName=N'Dev',IsActive=1,
+            AccessFailedCount=0,LockoutEnd=NULL,UpdatedAt=SYSUTCDATETIME()
+        WHERE UserId=@DevAdminUserId AND TenantId=@AuralyTenantId;
+    END;
+
+    IF NOT EXISTS(
+        SELECT 1 FROM dbo.UserRoles
+        WHERE UserId=@DevAdminUserId AND RoleId=@PlatformRoleId AND BusinessId IS NULL)
+        INSERT dbo.UserRoles(UserRoleId,UserId,RoleId,BusinessId,AssignedAt)
+        VALUES(NEWID(),@DevAdminUserId,@PlatformRoleId,NULL,SYSUTCDATETIME());
+
+    PRINT N'SeedAuralyPlatformAdministration: excepción temporal @auraly/admin habilitada en DEV.';
+END;
 GO
