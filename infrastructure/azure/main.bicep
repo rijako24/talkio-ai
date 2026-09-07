@@ -764,6 +764,10 @@ resource apiApp 'Microsoft.Web/sites@2024-04-01' = {
           value: 'mailto:soporte@auraly.app'
         }
         {
+          name: 'Notifications__WebPush__PublicAppUrl'
+          value: environment == 'prod' ? 'https://auralyapp.co' : 'https://${staticAdmin.properties.defaultHostname}'
+        }
+        {
           name: 'WhatsApp__Webhook__ApiBaseUrl'
           value: whatsAppApiBaseUrl
         }

@@ -154,6 +154,13 @@ jobs:
               $key.Dispose()
             }
           }
+          az webapp config appsettings set `
+            --resource-group RG-AURALY-DEV `
+            --name api-auraly-dev-w5usmo6w `
+            --settings `
+              "Notifications__WebPush__PublicAppUrl=https://proud-moss-0d9cf540f.7.azurestaticapps.net" `
+            --output none
+          if ($LASTEXITCODE) { throw 'Could not configure the DEV Web Push application URL.' }
 
       - name: Deploy API without release version
         shell: pwsh

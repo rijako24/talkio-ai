@@ -138,6 +138,7 @@ function Test-RemoteEnvironment {
         'Notifications__WebPush__PublicKey',
         'Notifications__WebPush__PrivateKey',
         'Notifications__WebPush__Subject',
+        'Notifications__WebPush__PublicAppUrl',
         'Auraly__Email__ConnectionString',
         'Auraly__Email__SenderAddress',
         'Auraly__Email__PublicAppUrl',
@@ -182,6 +183,8 @@ function Test-RemoteEnvironment {
         'Notifications__WebPush__PrivateKey no contiene una clave VAPID privada válida.'
     Assert-Condition ($settings['Notifications__WebPush__Subject'] -match '^(mailto:|https://)') `
         'Notifications__WebPush__Subject debe ser mailto: o https://.'
+    Assert-Condition ($settings['Notifications__WebPush__PublicAppUrl'] -match '^https://[^/]+/?$') `
+        'Notifications__WebPush__PublicAppUrl debe ser el origen HTTPS de la aplicación.'
     Assert-Condition ($settings['Auraly__Email__SenderAddress'] -match '^DoNotReply@') `
         'Auraly__Email__SenderAddress no usa el remitente administrado esperado.'
     Assert-Condition ($settings['Release__Version'] -eq $ReleaseVersion) `

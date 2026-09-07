@@ -227,6 +227,23 @@ public sealed class ServerSliceArchitectureTests
     }
 
     [Fact]
+    public void Dev_web_push_opens_the_dev_application_in_every_deployment_path()
+    {
+        var root = FindRepositoryRoot();
+        var template = File.ReadAllText(Path.Combine(
+            root, "infrastructure", "azure", "main.bicep"));
+        var fastWorkflow = File.ReadAllText(Path.Combine(
+            root, ".github", "workflows", "deploy-dev-fast.yml"));
+        var readiness = File.ReadAllText(Path.Combine(
+            root, "infrastructure", "azure", "Test-AuralyDeploymentReadiness.ps1"));
+
+        Assert.Contains("Notifications__WebPush__PublicAppUrl", template, StringComparison.Ordinal);
+        Assert.Contains("environment == 'prod' ? 'https://auralyapp.co' : 'https://${staticAdmin.properties.defaultHostname}'", template, StringComparison.Ordinal);
+        Assert.Contains("Notifications__WebPush__PublicAppUrl=https://proud-moss-0d9cf540f.7.azurestaticapps.net", fastWorkflow, StringComparison.Ordinal);
+        Assert.Contains("Notifications__WebPush__PublicAppUrl", readiness, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Azure_runtime_uses_managed_identity_and_declares_required_messaging_entities()
     {
         var root = FindRepositoryRoot();
