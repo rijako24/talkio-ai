@@ -53,6 +53,17 @@ jobs:
             az sql server firewall-rule delete --resource-group RG-AURALY-DEV --server sql-auraly-dev-w5usmo6w --name $rule --output none 2>$null
           }
 
+      - name: Configure DEV Web Push application URL
+        shell: pwsh
+        run: |
+          az webapp config appsettings set `
+            --resource-group RG-AURALY-DEV `
+            --name api-auraly-dev-w5usmo6w `
+            --settings `
+              "Notifications__WebPush__PublicAppUrl=https://proud-moss-0d9cf540f.7.azurestaticapps.net" `
+            --output none
+          if ($LASTEXITCODE) { throw 'Could not configure the DEV Web Push application URL.' }
+
   api:
     if: ${{ false }}
     name: Deploy API directly to DEV
@@ -154,14 +165,6 @@ jobs:
               $key.Dispose()
             }
           }
-          az webapp config appsettings set `
-            --resource-group RG-AURALY-DEV `
-            --name api-auraly-dev-w5usmo6w `
-            --settings `
-              "Notifications__WebPush__PublicAppUrl=https://proud-moss-0d9cf540f.7.azurestaticapps.net" `
-            --output none
-          if ($LASTEXITCODE) { throw 'Could not configure the DEV Web Push application URL.' }
-
       - name: Deploy API without release version
         shell: pwsh
         run: |
