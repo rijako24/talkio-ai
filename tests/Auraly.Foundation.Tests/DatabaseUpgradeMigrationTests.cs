@@ -184,9 +184,13 @@ public sealed class DatabaseUpgradeMigrationTests
         Assert.Contains("N'O-13'", options, StringComparison.Ordinal);
         Assert.Contains("platform.fiscal_certificates.expiry.read", platform,
             StringComparison.Ordinal);
-        Assert.DoesNotContain("INSERT dbo.AppUsers", platform,
-            StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("BootstrapAdminPasswordHash", platform,
+        Assert.Contains("IF LOWER(N'$(DeploymentEnvironment)')=N'dev'", platform,
+            StringComparison.Ordinal);
+        Assert.Contains("NULLIF(N'$(BootstrapAdminPasswordHash)',N'')", platform,
+            StringComparison.Ordinal);
+        Assert.Contains("requiere BootstrapAdminPasswordHash", platform,
+            StringComparison.Ordinal);
+        Assert.Contains("excepción temporal @auraly/admin habilitada en DEV", platform,
             StringComparison.Ordinal);
         Assert.Contains("NormalizedEmail=N'ADMIN@AURALY.AI'", platform,
             StringComparison.Ordinal);
